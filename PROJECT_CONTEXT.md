@@ -47,7 +47,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   itself — those architecture decisions live in this doc, the README, and
   comments in the SQL migrations.
 - **Scale**: 33 ordered Postgres migrations, 20 feature modules, 28 admin
-  routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 64
+  routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 67
   unit tests (18 test files) covering integrity-critical logic only — not
   UI, not CRUD happy-paths.
 - **Known gaps** — deliberately deferred, each needing its own scoped pass:
@@ -599,11 +599,12 @@ Current public deployment:
   accessibility deep QA as needed; Phase 9 — security/regression/production
   hardening; future — multi-school architecture.
 
-### Phase 6 Supabase Storage / Media Management (completed locally 2026-08-23)
+### Phase 6 Supabase Storage / Media Management (completed/deployed 2026-08-23)
 
 - Additive migration `0033_phase6_storage_and_gallery.sql` defines exactly two
   buckets with `ON CONFLICT DO NOTHING`: public `public-school-media` and private
-  `private-school-files`. It was intentionally not applied during this pass.
+  `private-school-files`. It was applied to the PRISM Supabase project and recorded
+  as `phase6_storage_and_gallery`; the exact buckets and RLS were verified.
 - Generated paths are single-school and category-scoped: `branding/{logo|favicon|og}`,
   `hero`, `programs/{id}`, `services/{id}`, `gallery`, and private
   `{students|staff}/{id}/photos`. No tenant/school key or service-role client is used.
@@ -626,13 +627,19 @@ Current public deployment:
 - `/gallery` renders active authentic uploads in a responsive `next/image` grid and
   preserves the approved premium empty state when none exist. Optional hero,
   program, and service media enhance the approved Phase 1–5 visuals without
-  removing their CSS/component fallbacks. Next Image permits only the configured
-  Supabase host and the two exact Storage URL path families.
+  removing their CSS/component fallbacks. The gallery initially has zero items, so
+  the approved empty state remains. Next Image permits only the configured Supabase
+  host and the two exact Storage URL path families.
 - Student and staff detail pages provide permission-scoped private photo upload,
   replacement, and signed preview. Expense/library/document attachment workflows,
   SVG, video, a generic media library, and automated orphan collection remain Phase 7.
 - Local validation: lint passed with the same six pre-existing React Hook Form
-  compiler warnings; `tsc --noEmit` passed; 64 tests in 18 files passed; and the
+  compiler warnings; `tsc --noEmit` passed; 67 tests in 18 files passed; and the
   Next.js production build generated all 58 routes. Build-time Supabase reads were
   blocked by the sandbox network and used the existing public fallbacks; the build
-  itself completed successfully. No migration, commit, push, or deployment occurred.
+  itself completed successfully. Migration `0033` was applied; one implementation
+  commit, `9e853eff34b708464ffdcd18c1df4ed6b0233832`, was pushed to `prismschool`;
+  and the Netlify production deploy was ready for that exact commit. `/` and
+  `/gallery` returned 200, while `/admin/website-settings` redirected
+  unauthenticated requests to login. No authentic media was uploaded during
+  automated validation, and no service-role client was used.
