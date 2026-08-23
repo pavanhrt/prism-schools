@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowRight, Atom, Binary, BookOpen } from "lucide-react";
+import { ArrowDown, Atom, Binary, BookOpen } from "lucide-react";
 
 export function AcademicHero() {
   return (
@@ -13,7 +13,6 @@ export function AcademicHero() {
           <p className="mt-6 max-w-2xl text-base leading-8 text-white/72 sm:text-lg">A thoughtful academic model that builds essential knowledge while helping learners question, apply, create and communicate with confidence.</p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link href="#academic-structure" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-prism-gold px-6 py-3 text-sm font-semibold text-prism-navy transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-prism-navy">Explore our approach <ArrowDown className="h-4 w-4" aria-hidden="true" /></Link>
-            <Link href="#configured-classes" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/50 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">View configured classes <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
           </div>
         </div>
         <div className="relative mx-auto w-full max-w-xl" aria-hidden="true">

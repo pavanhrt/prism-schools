@@ -446,11 +446,17 @@ Current public deployment:
 - `/about` explains the school philosophy, initial vision and mission, and the
   EXPLORE → CREATE → BUILD → SOLVE → LEAD progression without unsupported
   history, rankings, statistics, affiliations, awards, or facility claims.
-- `/academics` separates the descriptive Pre-Primary/Primary/Secondary learning
-  model from the **currently configured classes**. The latter remains data-backed
-  by the existing `classes` table through `createClient()` and
-  `features/academics/repository.ts#listClasses`; no inactive class is presented
-  as currently operating.
+- `/academics` presents the approved high-level Pre-Primary, Primary School, and
+  Secondary School learning model plus the UNDERSTAND → APPLY → EXPERIMENT →
+  CREATE → PRESENT → REFLECT approach. It intentionally does not query or render
+  operational `classes` records as public marketing content.
+- Existing Supabase class records such as `class 1`, `class 2`, `class 3`, and
+  `class 4` were manually created for backend/database testing. They remain
+  unchanged and useful to School OS operational testing, but are not authoritative
+  PRISM academic-program content and must not be exposed on the public website.
+  Until a later intentionally configured CMS/publication source exists, public-site
+  work must distinguish approved production content from test, demo, seed, and
+  operational data and keep unapproved records off the marketing experience.
 - `/admissions` presents the real enquiry → follow-up → application → review →
   admission journey and redesigns only the public enquiry form presentation.
   The existing `/api/public/enquire` Route Handler, shared Zod validation,
@@ -485,3 +491,18 @@ Current public deployment:
   change. Supabase RLS, authentication, RBAC, admin, portal, repositories,
   services, Server Actions, and existing admissions/data behavior remain
   unchanged.
+- **Deployment workflow/state**: Netlify automatically deploys the production
+  site at `https://prismschools.netlify.app/` from pushes to `prismschool`.
+  Specialist work, when used, is integrated and reviewed first; the final tested
+  commit is pushed to `origin/prismschool`, Netlify is allowed to publish that
+  branch push, and cache-bypassed production routes are then verified. A separate
+  manual deployment is not part of this workflow.
+- **Phase 4 production correction validation (2026-08-23)**: removed the public
+  Academics query/rendering path for backend test class records while leaving
+  Supabase and all operational consumers unchanged. `npm run lint` passed with
+  zero errors and the same six pre-existing React Hook Form compiler warnings;
+  `npx tsc --noEmit` passed; all 53 tests in 15 files passed; and the production
+  build generated all 57 routes. Non-destructive local checks returned 200 for
+  `/`, all five Phase 4 pages, and `/auth/login`; anonymous `/admin` and `/portal`
+  retained 307 login redirects. The local Academics HTML contained the approved
+  stage/approach markers and none of the configured/test-class markers.

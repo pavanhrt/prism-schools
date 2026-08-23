@@ -2,8 +2,8 @@ import { Blocks, Languages, Microscope } from "lucide-react";
 
 const stages = [
   { number: "01", title: "Pre-Primary", summary: "A welcoming beginning shaped by curiosity, communication, movement, play and discovery.", themes: ["Curiosity", "Communication", "Movement", "Play", "Discovery"], Icon: Blocks },
-  { number: "02", title: "Primary", summary: "Strong foundations grow through connected learning, creative expression and early technology awareness.", themes: ["Mathematics", "Science", "Languages", "Social understanding", "Creativity", "Technology awareness"], Icon: Languages },
-  { number: "03", title: "Secondary", summary: "Advanced academics are paired with the thinking and leadership capabilities learners need for what comes next.", themes: ["STEM", "Critical thinking", "Coding", "Technology", "Research", "Leadership"], Icon: Microscope },
+  { number: "02", title: "Primary School", summary: "Strong foundations grow through connected learning, creative expression and early technology awareness.", themes: ["Mathematics", "Science", "Languages", "Social understanding", "Creativity", "Technology awareness"], Icon: Languages },
+  { number: "03", title: "Secondary School", summary: "Advanced academics are paired with the thinking and leadership capabilities learners need for what comes next.", themes: ["STEM", "Critical thinking", "Coding", "Technology", "Research", "Leadership"], Icon: Microscope },
 ];
 
 export function AcademicStages() {
@@ -15,7 +15,7 @@ export function AcademicStages() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">Academic model</p>
             <h2 id="academic-structure-title" className="mt-4 text-3xl font-semibold tracking-tight text-prism-navy sm:text-4xl">Learning that grows with the learner.</h2>
           </div>
-          <p className="max-w-2xl text-base leading-8 text-slate-600 lg:pt-7">Each stage has a distinct purpose: begin with wonder, strengthen essential foundations and progress toward deeper inquiry, independence and leadership. This model describes our educational approach; current operational availability is listed separately below.</p>
+          <p className="max-w-2xl text-base leading-8 text-slate-600 lg:pt-7">Each stage has a distinct purpose: begin with wonder, strengthen essential foundations and progress toward deeper inquiry, independence and leadership. Together, these stages describe PRISM&apos;s approved high-level educational approach.</p>
         </div>
         <ol className="mt-12 grid gap-5 lg:mt-16 lg:grid-cols-3">
           {stages.map(({ number, title, summary, themes, Icon }) => (

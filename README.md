@@ -157,7 +157,9 @@ pass:
 
 ## Deployment
 
-Not yet deployed anywhere. The target per the architecture decisions is:
-Supabase Cloud (managed Postgres/Auth) with the Next.js app self-hosted via
-Docker + Nginx + HTTPS — Docker/Nginx config, CI/CD, and monitoring don't
-exist yet.
+The PRISM public website is deployed on Netlify at
+`https://prismschools.netlify.app/`. Netlify automatically builds and publishes
+pushes to `origin/prismschool`; a separate manual deployment is not part of the
+release workflow. Supabase Cloud plus a self-hosted Next.js runtime behind
+Docker, Nginx, and HTTPS remains an optional future architecture — Docker/Nginx
+config, CI/CD observability, and monitoring do not exist yet.
