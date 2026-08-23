@@ -18,48 +18,54 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col">
-      <section className="mx-auto flex max-w-5xl flex-col items-start gap-6 px-5 py-20">
-        <h1 className="max-w-2xl text-4xl font-semibold text-slate-900 sm:text-5xl">
-          {settings.school_name}
-        </h1>
-        <p className="max-w-xl text-lg text-slate-600">
-          A place where students learn, grow, and belong. Explore what makes our school
-          community what it is.
-        </p>
-        <div className="flex gap-3">
-          <Link
-            href="/admissions"
-            className="rounded-md bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            Enquire about admissions
-          </Link>
-          <Link
-            href="/about"
-            className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Learn more
-          </Link>
+      <section className="relative overflow-hidden bg-prism-bg">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-prism-navy via-prism-gold to-prism-navy" />
+        <div className="mx-auto flex max-w-5xl flex-col items-start gap-6 px-5 py-20 sm:py-28">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">
+            A Modern Legacy of Learning
+          </span>
+          <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-prism-navy sm:text-5xl">
+            {settings.school_name}
+          </h1>
+          <p className="max-w-xl text-lg text-slate-600">
+            A place where students learn, grow, and belong. Explore what makes our school
+            community what it is.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/admissions"
+              className="rounded-md bg-prism-navy px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-prism-navy-light"
+            >
+              Enquire about admissions
+            </Link>
+            <Link
+              href="/about"
+              className="rounded-md border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-prism-navy transition-colors hover:border-prism-navy"
+            >
+              Learn more
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section className="border-t border-slate-200 bg-slate-50">
+      <section className="border-t border-slate-200 bg-white">
         <div className="mx-auto grid max-w-5xl gap-8 px-5 py-16 sm:grid-cols-3">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Academics</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-prism-gold">Academics</h2>
             <p className="mt-2 text-sm text-slate-600">
               A structured curriculum from early years through to graduation, with dedicated
               subject teachers at every level.
             </p>
           </div>
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Admissions</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-prism-gold">Admissions</h2>
             <p className="mt-2 text-sm text-slate-600">
               A straightforward path from enquiry to enrollment — reach out and our
               admissions team will guide you through it.
             </p>
           </div>
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Community</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-prism-gold">Community</h2>
             <p className="mt-2 text-sm text-slate-600">
               Regular notices, events, and open communication between school and home.
             </p>

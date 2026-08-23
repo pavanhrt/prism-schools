@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "School OS",
-  description: "School management ecosystem — Phase 1: auth, RBAC, academic setup",
+  title: "PRISM SCHOOLS — A Modern Legacy of Learning",
+  description:
+    "PRISM SCHOOLS combines strong academic foundations with technology, creativity, and real-world learning.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

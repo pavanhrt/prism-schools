@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SchoolLogo } from "@/components/school/school-logo";
 
 export default function LoginPage() {
   const [serverError, setServerError] = useState<string | null>(null);
@@ -28,10 +29,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-prism-bg px-4">
+      <SchoolLogo size={64} priority />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in to School OS</CardTitle>
+          <CardTitle>Sign in to PRISM SCHOOLS</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
