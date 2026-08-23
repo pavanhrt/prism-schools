@@ -506,3 +506,9 @@ Current public deployment:
   `/`, all five Phase 4 pages, and `/auth/login`; anonymous `/admin` and `/portal`
   retained 307 login redirects. The local Academics HTML contained the approved
   stage/approach markers and none of the configured/test-class markers.
+- **Phase 4 final polish (2026-08-23)**: `class 1`, `class 2`, `class 3`, and
+  `class 4` are manually inserted backend test records, not authoritative public
+  marketing content; public `/academics` does not query, render, or otherwise
+  expose them. Gallery copy was polished with parent-facing language about the
+  authentic school moments this space will bring together as the community
+  grows. This final polish made no database migration or Supabase schema change.

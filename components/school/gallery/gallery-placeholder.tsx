@@ -46,7 +46,7 @@ export function GalleryPlaceholder() {
               Stories this space is designed to hold
             </h2>
             <p className="mt-5 text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
-              These editorial lenses describe the intended gallery structure; they do not represent published albums or claim specific past events.
+              As our school community grows, this space will bring together authentic moments of learning, creativity, technology and community life at PRISM.
             </p>
           </div>
 
