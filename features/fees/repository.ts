@@ -103,6 +103,15 @@ export async function listAllPayments(supabase: SupabaseClient): Promise<FeePaym
   return data;
 }
 
+export async function getPayment(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<FeePayment | null> {
+  const { data, error } = await supabase.from("fee_payments").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function listPaymentsForInvoice(
   supabase: SupabaseClient,
   invoiceId: string,

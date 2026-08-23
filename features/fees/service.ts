@@ -15,6 +15,7 @@ export const listInvoices = repo.listInvoices;
 export const getInvoice = repo.getInvoice;
 export const listInvoiceItems = repo.listInvoiceItems;
 export const listAllPayments = repo.listAllPayments;
+export const getPayment = repo.getPayment;
 export const listPaymentsForInvoice = repo.listPaymentsForInvoice;
 export const voidPayment = repo.voidPayment;
 

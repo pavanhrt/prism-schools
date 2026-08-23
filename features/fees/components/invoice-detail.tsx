@@ -139,29 +139,39 @@ export function InvoiceDetail({
                   {p.status === "voided" ? (
                     <Badge variant="outline">voided</Badge>
                   ) : (
-                    canVoid && (
-                      voidingId === p.id ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            className="h-7 w-32 text-xs"
-                            placeholder="Reason"
-                            value={voidReason}
-                            onChange={(e) => setVoidReason(e.target.value)}
-                          />
-                          <Button size="sm" variant="destructive" disabled={pending} onClick={() => confirmVoid(p.id)}>
-                            Confirm
-                          </Button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-red-500 underline"
-                          onClick={() => { setVoidingId(p.id); setVoidReason(""); }}
-                        >
-                          Void
-                        </button>
-                      )
-                    )
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={`/api/fees/receipts/${p.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-slate-600 underline hover:text-slate-900"
+                      >
+                        Download receipt
+                      </a>
+                      {canVoid && (
+                        voidingId === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              className="h-7 w-32 text-xs"
+                              placeholder="Reason"
+                              value={voidReason}
+                              onChange={(e) => setVoidReason(e.target.value)}
+                            />
+                            <Button size="sm" variant="destructive" disabled={pending} onClick={() => confirmVoid(p.id)}>
+                              Confirm
+                            </Button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-red-500 underline"
+                            onClick={() => { setVoidingId(p.id); setVoidReason(""); }}
+                          >
+                            Void
+                          </button>
+                        )
+                      )}
+                    </div>
                   )}
                 </div>
                 {p.status === "voided" && p.void_reason && (
