@@ -1,3 +1,16 @@
+# Repository instructions
+
+Before modifying this repository:
+
+1. Read AGENTS.md
+2. Read PROJECT_CONTEXT.md
+3. Read README.md
+4. Inspect git status
+5. Preserve repository → service → actions → components architecture
+6. Never bypass Supabase RLS
+7. Do not introduce multi-school architecture unless explicitly requested
+8. Do not modify database migrations unless the assigned task requires it
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
