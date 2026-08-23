@@ -26,14 +26,17 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
-  **Phase 2 (premium Home hero)**. Builds, type-checks, and passes its test
-  suite. **Not deployed anywhere.**
+  **Phase 3 (Future Learning Home experience)**. Builds, type-checks, and
+  passes its test suite. The public website is deployed on Netlify from the
+  `prismschool` branch at `https://prismschools.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
   navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
   the server-rendered `Where Learning Meets the Future` experience, the
   `A Modern Legacy of Learning` tagline, future-learning message, two valid
-  route CTAs, and a CSS-only prism/light visual. Phase 3 Home sections remain
-  intentionally deferred.
+  route CTAs, and a CSS-only prism/light visual. Phase 3 replaced the generic
+  Home content below that hero with a complete academic-stage, future-learning,
+  methodology, technology, differentiator, and parent-message journey. Broader
+  redesigns of the other public pages remain intentionally deferred to Phase 4.
 - **Commit history**: starts with `Initial commit from Create Next App`,
   then one large commit (`School OS: full build, Phases 1-10`) that built
   the entire system in one session, then incremental commits (README,
@@ -60,13 +63,13 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   - **Bulk class promotion**: the schema supports it (`student_enrollments`
     is designed for exactly this), but there's no "promote this whole class
     to next year" UI action yet — promotion currently happens per-student.
-  - **PRISM public website Phase 3**: academic-stage redesign, Beyond
-    Textbooks, AI & Technology, Robotics, Creative Thinking, Real-World
-    Skills, Learning by Doing, Technology Lab, Why PRISM, parent messaging,
-    and public CMS/configuration remain intentionally deferred.
-  - **Deployment**: nothing is deployed. Target is Supabase Cloud (managed
-    Postgres/Auth) + Next.js self-hosted via Docker + Nginx + HTTPS. No
-    Docker/Nginx config, CI/CD, or monitoring exists yet.
+  - **PRISM public website Phase 4**: broader redesigns of About, Academics,
+    Admissions, Gallery, and Contact remain intentionally deferred. Public
+    CMS/configuration also remains deferred.
+  - **Deployment architecture**: the public website currently deploys to
+    Netlify from `prismschool`. Supabase Cloud + a self-hosted Next.js runtime
+    behind Docker, Nginx, and HTTPS remains an optional future architecture;
+    Docker/Nginx config, CI/CD, and monitoring do not exist yet.
 
 ## 3. Tech stack
 
@@ -95,6 +98,7 @@ app/
 
 components/school/
 ├── hero/          Phase 2 Home hero content + decorative prism visual
+├── home/          Phase 3 Home sections and shared section heading
 ├── site-header.tsx
 ├── site-footer.tsx
 └── school-logo.tsx
@@ -284,20 +288,20 @@ the others.
 4. **Live SMS/WhatsApp.** SMS template + logging infrastructure exists
    (Phase 7); connect a real provider (e.g. Twilio) the same way Resend is
    wired for email. WhatsApp has no infrastructure yet.
-5. **Deployment.** Docker + Nginx + HTTPS (or a simpler managed host) for
-   the Next.js app against Supabase Cloud; no CI/CD or monitoring exists
-   yet. Do the `.env.local` git cleanup (§9) as part of this, not after.
+5. **Deployment hardening.** The public website currently deploys on Netlify
+   from `prismschool`. Add CI/CD observability and decide whether the managed
+   deployment remains the production architecture or moves to Docker + Nginx
+   + HTTPS against Supabase Cloud. Do the `.env.local` git cleanup (§9) first.
 6. **Manual QA of remaining flows.** The admin/portal route sweep (all 33
    routes load cleanly, no console errors) and one real create-flow
    (class → section → student → fee type → fee structure → invoice →
    payment → receipt) have been verified end-to-end. Exam results entry,
    payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
    have not yet been exercised with real data.
-7. **PRISM public website Phase 3.** Build the deferred Home content sections:
-   academic stages, Beyond Textbooks, AI & Technology, Robotics, Creative
-   Thinking, Real-World Skills, Learning by Doing, Technology Lab, Why PRISM,
-   parent messaging, and the final CTA. CMS/configuration and multi-school
-   architecture remain out of scope unless separately approved.
+7. **PRISM public website Phase 4.** Extend the approved PRISM visual system
+   across About, Academics, Admissions, Gallery, and Contact. Public CMS/
+   configuration and multi-school architecture remain out of scope unless
+   separately approved.
 
 ## 11. Working conventions for AI assistants on this repo
 
@@ -323,6 +327,18 @@ the others.
   `tests/unit/` suite deliberately skips UI and CRUD happy-path tests.
 
 ## 12. PRISM public website state
+
+### PRISM Website Transformation
+
+- Phase 1 — Branding/Foundation: Complete
+- Phase 2 — Premium Hero/Banner: Complete
+- Phase 3 — Future Learning Home Experience: Complete
+
+Current public deployment:
+
+- Platform: Netlify
+- Branch: `prismschool`
+- URL: `https://prismschools.netlify.app/`
 
 ### Phase 2 Home hero (completed 2026-08-23)
 
@@ -354,3 +370,37 @@ the others.
 - **Database**: Phase 2 introduced no database migration or Supabase schema
   change. Supabase RLS, authentication, admin, portal, repositories, services,
   Server Actions, and existing School OS workflows remain unchanged.
+
+### Phase 3 Future Learning Home experience (completed 2026-08-23)
+
+- `app/(public)/page.tsx` remains a Server Component and now composes seven
+  focused components from `components/school/home/`; it does not carry the
+  section implementation inline and it does not add a client boundary.
+- The generic Academics/Admissions/Community strip was replaced with Learning
+  for Every Stage, Beyond Textbooks, the PRISM future-ready philosophy,
+  Learning by Doing, technology learning experiences, Why PRISM, and a
+  parent-focused closing message.
+- Learning stages communicate Pre-Primary, Primary, and Secondary progression.
+  The future-learning content covers AI, robotics, creative thinking, and
+  real-world skills. Technology items are explicitly framed as learning
+  experiences and capabilities rather than claims about physical labs.
+- Motion extends the Phase 2 language with restrained hover transforms, a
+  subtle philosophy light path, and lightweight CSS geometry. The existing
+  global reduced-motion rule collapses all animation and transition durations,
+  while every message and sequence remains fully readable without motion.
+- The implementation is responsive from 1440 through 320 pixels: dense grids
+  collapse to two or one columns, the learning journey changes from horizontal
+  to stacked groups, and decorative geometry simplifies without hiding content.
+- Accessibility decisions include semantic sections and headings, ordered lists
+  for learning sequences, text labels independent of icons, decorative visuals
+  hidden from assistive technology, visible keyboard focus on valid links, and
+  navy/gold usage that keeps body copy at accessible contrast.
+- Phase 3 added no media, animation library, browser-side observer, client
+  component, third-party script, or dependency. All content is server-rendered;
+  visuals use existing Lucide icons plus CSS gradients and geometry.
+- Validation: `npm run lint` passed with zero errors and six pre-existing React
+  Hook Form compiler warnings; `npx tsc --noEmit` passed; `npm run test` passed
+  all 53 tests in 15 files; and `npm run build` passed with all 57 routes.
+- **Database**: Phase 3 introduced no database migration or Supabase schema
+  change. Supabase RLS, authentication, RBAC, admin, portal, and backend
+  business logic remain unchanged.
