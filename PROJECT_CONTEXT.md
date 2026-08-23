@@ -27,9 +27,10 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
   **Phase 7 (Advanced Admin Content & Media Experience)**. Phase 7 is
-  implementation-complete and pending production deployment. It builds,
-  type-checks, and passes its test suite. The currently deployed public website
-  remains on Netlify from the `prismschool` branch at
+  implementation-complete and deployed to production from commit
+  `1f510faa700b835716adbc5f77406ccaa1dda3dc`. It builds, type-checks, and
+  passes its test suite. The currently deployed public website remains on
+  Netlify from the `prismschool` branch at
   `https://prismschools.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
   navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
@@ -596,7 +597,7 @@ Current public deployment:
   pre-existing React Hook Form compiler warnings, TypeScript passed, all 57
   tests in 16 files passed, and the production build generated all 58 routes.
 - Deferred roadmap: Phase 7 advanced admin media/content experience is now
-  implementation-complete and pending production deployment. Phase 8 is limited
+  implementation-complete and deployed to production. Phase 8 is limited
   to a dedicated SEO, Lighthouse, Core Web Vitals, WCAG, and bundle-optimization
   audit.
 
@@ -651,7 +652,7 @@ Current public deployment:
   not performed, and full temporary-media cleanup must not be claimed. These normal
   administrator media operations used no service-role client.
 
-### Phase 7 Advanced Admin Content & Media Experience (implementation complete; pending production deployment)
+### Phase 7 Advanced Admin Content & Media Experience (implementation complete; deployed)
 
 - Website Management is now organized into focused admin routes for Overview,
   Branding, Homepage, Programs, Future Learning, Why PRISM, Gallery,
@@ -692,5 +693,12 @@ Current public deployment:
   React Hook Form compiler warnings; `npx tsc --noEmit` passed; `npm run test`
   passed all 84 tests in 20 files; and `npm run build` passed and generated all
   67 routes.
-- Production deployment is still pending. Phase 8 recommendations are limited to
-  a dedicated SEO, Lighthouse, Core Web Vitals, WCAG, and bundle-optimization audit.
+- Production commit `1f510faa700b835716adbc5f77406ccaa1dda3dc` was published by
+  Netlify as ready deploy `6a8adf81ac20fb0008498205`; public route HTTP 200
+  checks passed for `/`, `/about`, `/academics`, `/admissions`, `/gallery`, and
+  `/contact`; protected Website Management routes returned the expected
+  unauthenticated admin redirects; an authenticated browser rerun was prevented
+  because the browser-control sandbox failed to attach to the signed-in tab; and
+  the temporary Phase 6 gallery record/object still awaits explicit deletion
+  confirmation. Phase 8 recommendations are limited to a dedicated SEO,
+  Lighthouse, Core Web Vitals, WCAG, and bundle-optimization audit.
