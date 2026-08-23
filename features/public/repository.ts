@@ -36,7 +36,8 @@ export async function listActiveWebsitePrograms(
     .order("display_order", { ascending: true })
     .order("title", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  if (!data?.length) throw new Error("Public website CMS returned no active programs");
+  return data;
 }
 
 export async function listActiveWebsiteServices(
@@ -49,7 +50,8 @@ export async function listActiveWebsiteServices(
     .order("display_order", { ascending: true })
     .order("title", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  if (!data?.length) throw new Error("Public website CMS returned no active services");
+  return data;
 }
 
 export async function listActiveWebsiteFeatures(
@@ -62,5 +64,6 @@ export async function listActiveWebsiteFeatures(
     .order("display_order", { ascending: true })
     .order("title", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  if (!data?.length) throw new Error("Public website CMS returned no active features");
+  return data;
 }

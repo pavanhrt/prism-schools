@@ -4,7 +4,17 @@ import { schoolSettingsUpdateSchema, websiteProgramSchema } from "@/validations/
 
 describe("website settings validation", () => {
   it("accepts safe internal CTA paths and six-digit colors", () => {
-    expect(schoolSettingsUpdateSchema.parse({ hero_primary_cta_url: "/academics", primary_color: "#0B1F3A" })).toEqual({ hero_primary_cta_url: "/academics", primary_color: "#0B1F3A" });
+    expect(schoolSettingsUpdateSchema.parse({
+      hero_primary_cta_url: "/about",
+      primary_color: "#071A3D",
+      secondary_color: "#0B2A5B",
+      accent_color: "#C9A227",
+    })).toEqual({
+      hero_primary_cta_url: "/about",
+      primary_color: "#071A3D",
+      secondary_color: "#0B2A5B",
+      accent_color: "#C9A227",
+    });
   });
   it("rejects unsafe URLs and malformed colors", () => {
     expect(schoolSettingsUpdateSchema.safeParse({ website_url: "javascript:alert(1)" }).success).toBe(false);

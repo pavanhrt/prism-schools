@@ -11,17 +11,17 @@ alter table public.school_settings
   add column description text,
   add column logo_url text,
   add column favicon_url text,
-  add column primary_color text not null default '#0B1F3A',
-  add column secondary_color text not null default '#FFFFFF',
-  add column accent_color text not null default '#D4AF37',
+  add column primary_color text not null default '#071A3D',
+  add column secondary_color text not null default '#0B2A5B',
+  add column accent_color text not null default '#C9A227',
   add column hero_eyebrow text not null default 'PRISM SCHOOLS',
   add column hero_tagline text not null default 'A Modern Legacy of Learning',
   add column hero_title text not null default 'Where Learning Meets the Future',
   add column hero_description text not null default 'We go beyond textbooks — empowering students with AI, robotics, technology, creativity and real-world experiences to build the skills of tomorrow.',
-  add column hero_primary_cta_label text not null default 'Explore Academics',
-  add column hero_primary_cta_url text not null default '/academics',
-  add column hero_secondary_cta_label text not null default 'Begin Admissions',
-  add column hero_secondary_cta_url text not null default '/admissions',
+  add column hero_primary_cta_label text not null default 'Explore Our School',
+  add column hero_primary_cta_url text not null default '/about',
+  add column hero_secondary_cta_label text not null default 'Discover Future Learning',
+  add column hero_secondary_cta_url text not null default '/academics',
   add column website_url text,
   add column address_line text,
   add column city text,
@@ -246,10 +246,10 @@ revoke execute on function public.update_website_settings(jsonb) from public, an
 grant execute on function public.update_website_settings(jsonb) to authenticated;
 
 insert into public.website_programs
-  (title, slug, level, short_description, display_order) values
-  ('Pre-Primary', 'pre-primary', 'Early Years', 'A welcoming beginning shaped by curiosity, communication, movement, play and discovery.', 10),
-  ('Primary School', 'primary-school', 'Primary', 'Strong foundations grow through connected learning, creative expression and early technology awareness.', 20),
-  ('Secondary School', 'secondary-school', 'Secondary', 'Advanced academics are paired with the thinking and leadership capabilities learners need for what comes next.', 30)
+  (title, slug, level, headline, short_description, display_order) values
+  ('Pre-Primary', 'pre-primary', 'Early Years', 'Curiosity Starts Here', 'A welcoming beginning shaped by curiosity, communication, movement, play and discovery.', 10),
+  ('Primary School', 'primary-school', 'Primary', 'Building Strong Foundations', 'Strong foundations grow through connected learning, creative expression and early technology awareness.', 20),
+  ('Secondary School', 'secondary-school', 'Secondary', 'Preparing Students for Tomorrow', 'Advanced academics are paired with the thinking and leadership capabilities learners need for what comes next.', 30)
 on conflict (slug) do nothing;
 
 insert into public.website_services

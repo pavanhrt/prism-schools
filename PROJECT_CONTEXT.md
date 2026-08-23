@@ -46,7 +46,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   `git blame` for "why did module X change" from the Phase 1-10 commit
   itself — those architecture decisions live in this doc, the README, and
   comments in the SQL migrations.
-- **Scale**: 30 ordered Postgres migrations, 19 feature modules, 28 admin
+- **Scale**: 32 ordered Postgres migrations, 19 feature modules, 28 admin
   routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 53
   unit tests (15 test files) covering integrity-critical logic only — not
   UI, not CRUD happy-paths.
@@ -520,6 +520,10 @@ Current public deployment:
   existing `school_settings` row (`id = 1`) and creates `website_programs`,
   `website_services`, and `website_features`. These are single-school public
   website configuration tables; there is no school/tenant key.
+- Migration `supabase/migrations/0032_correct_secondary_navy.sql` corrects
+  the Phase 5 secondary brand token to approved Secondary Navy `#0B2A5B`.
+  It changes the column default and updates the singleton only while its value
+  is the mistaken 0031 seed `#FFFFFF`, preserving later operator customization.
 - Operational School OS data (`classes`, students, enrollments, fees, exams)
   remains distinct from public website marketing content (brand/hero/contact/
   SEO settings, programs, future-learning services, and Why PRISM features).
@@ -558,6 +562,38 @@ Current public deployment:
 - Deployment remains Netlify from branch `prismschool` at
   `https://prismschools.netlify.app/`. Code changes require a branch push;
   subsequent CMS content changes flow through Supabase and revalidation.
+- **Phase 5 final-validation status (2026-08-23)**: production project
+  `prismschool` was verified as the project referenced by `.env.local`, and
+  0031 and additive 0032 migrations were applied through the authorized
+  Supabase workflow. Production now has the
+  website settings columns plus 3 programs, 4 services, and 6 features. Direct
+  anonymous-key calls returned all four expected CMS data sets; anonymous
+  insert was rejected by RLS, update/delete affected zero rows, and the
+  settings RPC was denied. The production singleton and column default are
+  `#0B2A5B`; the pre-first-install 0031 source and emergency fallback use the
+  same approved Primary Navy/Secondary Navy/Gold palette, with white remaining
+  a separate surface token. Hero defaults agree, and the seeded
+  programs own the approved headlines. Unexpected empty seeded collections are
+  treated as failures and logged server-side before existing presentation
+  fallbacks protect the public experience. Supabase CMS remains the primary
+  source; fallbacks are emergency behavior only.
+- The same final-validation pass confirmed from the installed Next.js 16.3.2
+  documentation and implementation that successful Server Actions call
+  `updateTag("public-website-config")` and revalidate all public routes,
+  sitemap, and robots. The exact authorized-admin Hero mutation, active/
+  inactive program, service-order, restoration, and unauthorized-authenticated
+  production tests were **not run** because no authorized browser session or
+  non-service-role account credentials were available. No service-role client
+  was used as a substitute. These tests must not be marked passed until
+  completed through `/admin/website-settings` with an authorized session.
+  Production also has a pre-existing
+  migration-ledger drift: 0030's columns exist although 0030 is not recorded;
+  replay was safely rejected as a duplicate-column operation and made no change.
+- Final local validation passed: lint reported zero errors and the same six
+  pre-existing React Hook Form compiler warnings, TypeScript passed, all 57
+  tests in 16 files passed, and the production build generated all 58 routes.
+- No Phase 6 Supabase Storage or media-upload work was introduced by the final
+  validation pass.
 - Deferred roadmap: Phase 6 — Supabase Storage/media management; Phase 7 —
   advanced admin media/content experience; Phase 8 — SEO/performance/
   accessibility deep QA as needed; Phase 9 — security/regression/production
