@@ -26,7 +26,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
-  **Phase 3 (Future Learning Home experience)**. Builds, type-checks, and
+  **Phase 4 (Public Website Transformation)**. Builds, type-checks, and
   passes its test suite. The public website is deployed on Netlify from the
   `prismschool` branch at `https://prismschools.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
@@ -35,8 +35,9 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   `A Modern Legacy of Learning` tagline, future-learning message, two valid
   route CTAs, and a CSS-only prism/light visual. Phase 3 replaced the generic
   Home content below that hero with a complete academic-stage, future-learning,
-  methodology, technology, differentiator, and parent-message journey. Broader
-  redesigns of the other public pages remain intentionally deferred to Phase 4.
+  methodology, technology, differentiator, and parent-message journey. Phase 4
+  brought About, Academics, Admissions, Gallery, and Contact into the same
+  premium, responsive PRISM design language without changing the approved Home.
 - **Commit history**: starts with `Initial commit from Create Next App`,
   then one large commit (`School OS: full build, Phases 1-10`) that built
   the entire system in one session, then incremental commits (README,
@@ -63,9 +64,11 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   - **Bulk class promotion**: the schema supports it (`student_enrollments`
     is designed for exactly this), but there's no "promote this whole class
     to next year" UI action yet — promotion currently happens per-student.
-  - **PRISM public website Phase 4**: broader redesigns of About, Academics,
-    Admissions, Gallery, and Contact remain intentionally deferred. Public
-    CMS/configuration also remains deferred.
+  - **Public website configuration**: a school website CMS, admin website
+    editor, dynamic programs/services configuration, and Supabase Storage/media
+    uploads remain deferred. Public content is intentionally code-owned for now.
+  - **Multi-school architecture**: remains explicitly deferred; School OS is a
+    single-school system.
   - **Deployment architecture**: the public website currently deploys to
     Netlify from `prismschool`. Supabase Cloud + a self-hosted Next.js runtime
     behind Docker, Nginx, and HTTPS remains an optional future architecture;
@@ -298,10 +301,10 @@ the others.
    payment → receipt) have been verified end-to-end. Exam results entry,
    payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
    have not yet been exercised with real data.
-7. **PRISM public website Phase 4.** Extend the approved PRISM visual system
-   across About, Academics, Admissions, Gallery, and Contact. Public CMS/
-   configuration and multi-school architecture remain out of scope unless
-   separately approved.
+7. **Public website Phase 5.** Add CMS/configuration, an admin website editor,
+   dynamic programs/services, and authentic school media through Supabase
+   Storage only as separately scoped work. Multi-school architecture remains
+   out of scope.
 
 ## 11. Working conventions for AI assistants on this repo
 
@@ -333,6 +336,7 @@ the others.
 - Phase 1 — Branding/Foundation: Complete
 - Phase 2 — Premium Hero/Banner: Complete
 - Phase 3 — Future Learning Home Experience: Complete
+- Phase 4 — Public Website Transformation: Complete
 
 Current public deployment:
 
@@ -432,3 +436,52 @@ Current public deployment:
 - **Database**: the Phase 3 polish pass introduced no database migration or
   Supabase schema change. RLS, authentication, RBAC, admin, portal, and backend
   business logic remain unchanged.
+
+### Phase 4 Public Website Transformation (completed 2026-08-23)
+
+- The approved `/` Home experience remains unchanged. The transformed public
+  journey now covers `/about`, `/academics`, `/admissions`, `/gallery`, and
+  `/contact`, all within the existing shared Header/Footer and PRISM
+  navy/gold/white visual foundation.
+- `/about` explains the school philosophy, initial vision and mission, and the
+  EXPLORE → CREATE → BUILD → SOLVE → LEAD progression without unsupported
+  history, rankings, statistics, affiliations, awards, or facility claims.
+- `/academics` separates the descriptive Pre-Primary/Primary/Secondary learning
+  model from the **currently configured classes**. The latter remains data-backed
+  by the existing `classes` table through `createClient()` and
+  `features/academics/repository.ts#listClasses`; no inactive class is presented
+  as currently operating.
+- `/admissions` presents the real enquiry → follow-up → application → review →
+  admission journey and redesigns only the public enquiry form presentation.
+  The existing `/api/public/enquire` Route Handler, shared Zod validation,
+  honeypot, explicit-field insert, and server-only service-role isolation are
+  unchanged.
+- `/gallery` provides an intentional media-ready experience with CSS-only
+  framing and clearly labelled future editorial lenses. It contains no stock
+  photography, invented school events, claimed facilities, Storage integration,
+  or fabricated albums.
+- `/contact` remains data-backed by `school_settings` through the existing
+  settings repository. Configured address, email, and phone remain authoritative;
+  the approved Proddatur/Kadapa/Andhra Pradesh/India address and public email are
+  fallbacks only when their corresponding configured values are empty. Phone is
+  never invented.
+- Page-specific components live under `components/school/about/`,
+  `academics/`, `admissions/`, `gallery/`, and `contact/`. Their heroes remain
+  intentionally distinct; no generic abstraction was introduced because their
+  compositions do not share enough structure beyond established design tokens.
+- Responsive layouts are mobile-first from 320 through 1440 pixels, using
+  wrapping text, contained decoration, and collapsing grids. Accessibility
+  includes semantic heading order, ordered processes, labelled form controls,
+  announced required/error/status states, keyboard focus treatments,
+  screen-reader-hidden decoration, and the existing global reduced-motion rule.
+- Validation: `npm run lint` passed with zero errors and six pre-existing React
+  Hook Form compiler warnings; `npx tsc --noEmit` passed; `npm run test` passed
+  all 53 tests in 15 files; and `npm run build` passed with all 57 routes.
+  Live non-destructive checks returned 200 for `/`, all five transformed pages,
+  and `/auth/login`; anonymous `/admin` and `/portal` requests retained their
+  307 login redirects. Responsive width behavior was source-reviewed because a
+  browser backend was unavailable for screenshot-based viewport measurement.
+- **Database**: Phase 4 introduced no database migration or Supabase schema
+  change. Supabase RLS, authentication, RBAC, admin, portal, repositories,
+  services, Server Actions, and existing admissions/data behavior remain
+  unchanged.

@@ -1,22 +1,19 @@
 import type { Metadata } from "next";
-import { EnquiryForm } from "@/features/public/components/enquiry-form";
+import { AdmissionsEnquiry } from "@/components/school/admissions/admissions-enquiry";
+import { AdmissionsHero } from "@/components/school/admissions/admissions-hero";
+import { AdmissionsProcess } from "@/components/school/admissions/admissions-process";
 
 export const metadata: Metadata = {
   title: "Admissions",
-  description: "Start an admissions enquiry.",
+  description: "Begin your child's PRISM journey and connect with our admissions team.",
 };
 
 export default function AdmissionsPage() {
   return (
-    <div className="mx-auto max-w-2xl px-5 py-16">
-      <h1 className="text-3xl font-semibold text-slate-900">Admissions</h1>
-      <p className="mt-4 text-slate-700">
-        Tell us a bit about your child and we&apos;ll reach out to guide you through the
-        admissions process — from enquiry, to application, to enrollment.
-      </p>
-      <div className="mt-8 rounded-lg border border-slate-200 p-4 sm:p-6">
-        <EnquiryForm />
-      </div>
+    <div className="overflow-hidden">
+      <AdmissionsHero />
+      <AdmissionsProcess />
+      <AdmissionsEnquiry />
     </div>
   );
 }

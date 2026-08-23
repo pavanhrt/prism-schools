@@ -1,37 +1,22 @@
 import type { Metadata } from "next";
+import { AboutHero } from "@/components/school/about/about-hero";
+import { Philosophy } from "@/components/school/about/philosophy";
+import { PrismPath } from "@/components/school/about/prism-path";
+import { VisionMission } from "@/components/school/about/vision-mission";
 
 export const metadata: Metadata = {
-  title: "About",
-  description: "Our mission, vision, and history.",
+  title: "About PRISM SCHOOLS",
+  description:
+    "Discover the philosophy, vision, and mission behind PRISM SCHOOLS — strong academic foundations shaped for a changing world.",
 };
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-3xl px-5 py-16">
-      <h1 className="text-3xl font-semibold text-slate-900">About Us</h1>
-      <div className="mt-8 flex flex-col gap-8 text-slate-700">
-        <section>
-          <h2 className="text-lg font-semibold text-slate-900">Our Mission</h2>
-          <p className="mt-2">
-            To provide a nurturing environment where every student is equipped with the
-            knowledge, character, and confidence to thrive.
-          </p>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-slate-900">Our Vision</h2>
-          <p className="mt-2">
-            To be a school recognized for academic excellence and the strength of its
-            community, inside and outside the classroom.
-          </p>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-slate-900">Principal&apos;s Message</h2>
-          <p className="mt-2">
-            Every student who walks through our doors brings something the school becomes
-            better for having. Our role is to notice it, and help it grow.
-          </p>
-        </section>
-      </div>
+    <div className="overflow-hidden bg-white">
+      <AboutHero />
+      <Philosophy />
+      <VisionMission />
+      <PrismPath />
     </div>
   );
 }
