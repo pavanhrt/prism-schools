@@ -5,6 +5,7 @@ import type { GalleryItemInput, GalleryItemUpdateInput } from "@/validations/med
 import * as settingsRepository from "@/features/settings/repository";
 
 export const PRIVATE_SIGNED_URL_TTL_SECONDS = 300;
+export class PublicMediaCleanupError extends Error {}
 const limits = { brand: 2 * 1024 * 1024, general: 8 * 1024 * 1024, privatePhoto: 5 * 1024 * 1024 } as const;
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 const starts = (bytes: Uint8Array, values: number[]) => values.every((value, index) => bytes[index] === value);
@@ -35,9 +36,13 @@ function root(category: PublicMediaCategory, id?: string) {
 }
 
 export function isManagedPath(bucket: string, path: string) {
-  if (path.includes("..") || path.startsWith("/") || path.includes("\\")) return false;
-  if (bucket === PUBLIC_MEDIA_BUCKET) return /^(branding\/(logo|favicon|og)|hero|programs\/[0-9a-f-]+|services\/[0-9a-f-]+|gallery)\/[0-9a-f-]+\.(jpg|png|webp|avif|ico)$/.test(path);
-  return bucket === PRIVATE_MEDIA_BUCKET && /^(students|staff)\/[0-9a-f-]+\/photos\/[0-9a-f-]+\.(jpg|png|webp|avif)$/.test(path);
+  const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+  const image = "(?:jpg|png|webp|avif)";
+  if (bucket === PUBLIC_MEDIA_BUCKET) {
+    return new RegExp(`^(?:branding\/(?:logo|og)\/${uuid}\\.${image}|branding\/favicon\/${uuid}\\.(?:${image}|ico)|hero\/${uuid}\\.${image}|programs\/${uuid}\/${uuid}\\.${image}|services\/${uuid}\/${uuid}\\.${image}|gallery\/${uuid}\\.${image})$`).test(path);
+  }
+  return bucket === PRIVATE_MEDIA_BUCKET
+    && new RegExp(`^(?:students|staff)\/${uuid}\/photos\/${uuid}\\.${image}$`).test(path);
 }
 
 export function managedPathFromPublicUrl(value: string | null): string | null {
@@ -47,6 +52,12 @@ export function managedPathFromPublicUrl(value: string | null): string | null {
   if (index < 0) return null;
   const path = decodeURIComponent(value.slice(index + marker.length));
   return isManagedPath(PUBLIC_MEDIA_BUCKET, path) ? path : null;
+}
+
+function managedPathForClient(s: SupabaseClient, value: string | null): string | null {
+  if (!value) return null;
+  const bucketBaseUrl = repository.getPublicUrl(s, PUBLIC_MEDIA_BUCKET, "");
+  return value.startsWith(bucketBaseUrl) ? managedPathFromPublicUrl(value) : null;
 }
 
 export async function uploadPublicMedia(s: SupabaseClient, category: PublicMediaCategory, file: File, id?: string): Promise<StoredMedia> {
@@ -76,9 +87,29 @@ export async function replacePublicReference(
   const media = await uploadPublicMedia(s, category, file, id);
   try { await persist(media.url!); }
   catch (error) { await repository.removeObject(s, media.bucket, media.path).catch(() => undefined); throw error; }
-  const oldPath = managedPathFromPublicUrl(currentValue);
+  const oldPath = managedPathForClient(s, currentValue);
   if (oldPath && oldPath !== media.path) await repository.removeObject(s, PUBLIC_MEDIA_BUCKET, oldPath).catch(() => undefined);
   return media;
+}
+
+/**
+ * Clears the database reference before attempting Storage cleanup. Persistence
+ * errors leave the object intact; cleanup errors are reported after the safe
+ * cleared state has been committed and are never rolled back to a stale URL.
+ */
+export async function clearPublicReference(
+  s: SupabaseClient,
+  currentValue: string | null,
+  persist: (url: string | null) => Promise<unknown>,
+): Promise<void> {
+  await persist(null);
+  const oldPath = managedPathForClient(s, currentValue);
+  if (!oldPath) return;
+  try {
+    await repository.removeObject(s, PUBLIC_MEDIA_BUCKET, oldPath);
+  } catch {
+    throw new PublicMediaCleanupError("Media reference was cleared, but the managed file could not be deleted. Please try cleanup again later.");
+  }
 }
 
 export async function replacePrivatePhoto(

@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { detectImageType, isManagedPath, managedPathFromPublicUrl, PRIVATE_SIGNED_URL_TTL_SECONDS } from "@/features/media/service";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { clearPublicReference, detectImageType, isManagedPath, managedPathFromPublicUrl, PRIVATE_SIGNED_URL_TTL_SECONDS, replacePublicReference, uploadPublicMedia, validateImageFile } from "@/features/media/service";
+import * as repository from "@/features/media/repository";
 import { PRIVATE_MEDIA_BUCKET, PUBLIC_MEDIA_BUCKET } from "@/types/media";
 
 describe("media service security", () => {
+  afterEach(() => vi.restoreAllMocks());
   it("checks file signatures", () => {
     expect(detectImageType(new Uint8Array([0xff, 0xd8, 0xff]))?.mime).toBe("image/jpeg");
     expect(detectImageType(new TextEncoder().encode("<svg><script>"))).toBeNull();
@@ -12,11 +15,60 @@ describe("media service security", () => {
     expect(isManagedPath(PUBLIC_MEDIA_BUCKET, `gallery/${id}.webp`)).toBe(true);
     expect(isManagedPath(PRIVATE_MEDIA_BUCKET, `students/${id}/photos/${id}.jpg`)).toBe(true);
     expect(isManagedPath(PRIVATE_MEDIA_BUCKET, `students/${id}/../../secret.pdf`)).toBe(false);
+    expect(isManagedPath(PUBLIC_MEDIA_BUCKET, "hero/abc-def.webp")).toBe(false);
+    expect(isManagedPath(PUBLIC_MEDIA_BUCKET, `hero/../${id}.webp`)).toBe(false);
+    expect(isManagedPath(PUBLIC_MEDIA_BUCKET, `hero/${id}.ico`)).toBe(false);
+    expect(isManagedPath(PUBLIC_MEDIA_BUCKET, `branding/favicon/${id}.ico`)).toBe(true);
+    expect(isManagedPath(PUBLIC_MEDIA_BUCKET, `hero/${id.toUpperCase()}.webp`)).toBe(false);
   });
   it("uses short-lived private URLs", () => expect(PRIVATE_SIGNED_URL_TTL_SECONDS).toBe(300));
   it("only extracts cleanup paths from the managed public bucket", () => {
     const id = "9ae33062-11f2-41d2-89fa-d48cbe309702";
     expect(managedPathFromPublicUrl(`https://project.supabase.co/storage/v1/object/public/public-school-media/hero/${id}.webp`)).toBe(`hero/${id}.webp`);
     expect(managedPathFromPublicUrl(`https://project.supabase.co/storage/v1/object/public/other-bucket/hero/${id}.webp`)).toBeNull();
+  });
+
+  it("rejects unsafe signatures and declared MIME mismatches", async () => {
+    await expect(validateImageFile(new File(["<svg></svg>"], "x.svg", { type: "image/svg+xml" }), 100)).rejects.toThrow("Only JPEG");
+    await expect(validateImageFile(new File(["<html></html>"], "x.html", { type: "text/html" }), 100)).rejects.toThrow("Only JPEG");
+    await expect(validateImageFile(new File([new Uint8Array([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32])], "x.mp4", { type: "video/mp4" }), 100)).rejects.toThrow("Only JPEG");
+    await expect(validateImageFile(new File([new Uint8Array([0xff, 0xd8, 0xff])], "x.png", { type: "image/png" }), 100)).rejects.toThrow("does not match");
+  });
+
+  it("enforces the category size limit before reading the file", async () => {
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "large.jpg", { type: "image/jpeg" });
+    Object.defineProperty(file, "size", { value: 2 * 1024 * 1024 + 1 });
+    const arrayBuffer = vi.spyOn(file, "arrayBuffer");
+    await expect(uploadPublicMedia({} as SupabaseClient, "branding-logo", file)).rejects.toThrow("2 MB limit");
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("cleans up a new public object when reference persistence fails", async () => {
+    vi.spyOn(repository, "uploadObject").mockResolvedValue();
+    vi.spyOn(repository, "getPublicUrl").mockImplementation((_s, _bucket, path) => `https://project.supabase.co/storage/v1/object/public/${PUBLIC_MEDIA_BUCKET}/${path}`);
+    const remove = vi.spyOn(repository, "removeObject").mockResolvedValue();
+    const persist = vi.fn().mockRejectedValue(new Error("database failed"));
+    await expect(replacePublicReference({} as SupabaseClient, "hero", new File([new Uint8Array([0xff, 0xd8, 0xff])], "x.jpg", { type: "image/jpeg" }), null, persist)).rejects.toThrow("database failed");
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears a managed reference before deleting its object", async () => {
+    const id = "9ae33062-11f2-41d2-89fa-d48cbe309702";
+    const order: string[] = [];
+    const persist = vi.fn(async () => { order.push("persist"); });
+    vi.spyOn(repository, "getPublicUrl").mockImplementation((_s, _bucket, path) => `https://project.supabase.co/storage/v1/object/public/${PUBLIC_MEDIA_BUCKET}/${path}`);
+    vi.spyOn(repository, "removeObject").mockImplementation(async () => { order.push("remove"); });
+    await clearPublicReference({} as SupabaseClient, `https://project.supabase.co/storage/v1/object/public/${PUBLIC_MEDIA_BUCKET}/hero/${id}.webp`, persist);
+    expect(persist).toHaveBeenCalledWith(null);
+    expect(order).toEqual(["persist", "remove"]);
+  });
+
+  it("clears a non-managed reference without deleting Storage", async () => {
+    const persist = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(repository, "getPublicUrl").mockImplementation((_s, _bucket, path) => `https://project.supabase.co/storage/v1/object/public/${PUBLIC_MEDIA_BUCKET}/${path}`);
+    const remove = vi.spyOn(repository, "removeObject").mockResolvedValue();
+    await clearPublicReference({} as SupabaseClient, `https://example.com/storage/v1/object/public/${PUBLIC_MEDIA_BUCKET}/hero/9ae33062-11f2-41d2-89fa-d48cbe309702.webp`, persist);
+    expect(persist).toHaveBeenCalledWith(null);
+    expect(remove).not.toHaveBeenCalled();
   });
 });

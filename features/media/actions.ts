@@ -13,6 +13,7 @@ import * as studentsRepository from "@/features/students/repository";
 import * as staffRepository from "@/features/staff/repository";
 
 export type MediaActionResult = { ok: true; media: StoredMedia } | { ok: false; error: string };
+export type RemoveMediaActionResult = { ok: true } | { ok: false; error: string; referenceCleared?: boolean };
 export type GalleryActionResult = { ok: true } | { ok: false; error: string };
 const categorySchema = z.enum(["branding-logo", "branding-favicon", "hero", "og-image", "program", "service"]);
 const errorText = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
@@ -46,6 +47,42 @@ export async function uploadPublicMediaAction(category: string, entityId: string
     refreshPublicWebsite(); revalidatePath("/admin/website-settings");
     return { ok: true, media };
   } catch (error) { return { ok: false, error: errorText(error, "Could not upload media.") }; }
+}
+
+export async function removePublicMediaAction(category: string, entityId: string | null): Promise<RemoveMediaActionResult> {
+  try {
+    await requirePermission("website_settings.manage");
+    const kind = categorySchema.parse(category);
+    const id = kind === "program" || kind === "service" ? entityIdSchema.parse(entityId) : undefined;
+    const client = await createClient();
+    let current: string | null;
+    let persist: (url: string | null) => Promise<unknown>;
+    if (kind === "program") {
+      const record = (await settingsRepository.listWebsitePrograms(client)).find((item) => item.id === id);
+      if (!record) throw new Error("Program not found.");
+      current = record.image_url;
+      persist = (url) => settingsRepository.updateWebsiteProgram(client, id!, { image_url: url });
+    } else if (kind === "service") {
+      const record = (await settingsRepository.listWebsiteServices(client)).find((item) => item.id === id);
+      if (!record) throw new Error("Service not found.");
+      current = record.visual_asset_url;
+      persist = (url) => settingsRepository.updateWebsiteService(client, id!, { visual_asset_url: url });
+    } else {
+      const settings = await settingsRepository.getSchoolSettings(client);
+      const field = ({ "branding-logo": "logo_url", "branding-favicon": "favicon_url", hero: "hero_image_url", "og-image": "og_image_url" } as const)[kind];
+      current = settings[field];
+      persist = (url) => settingsRepository.updateSchoolSettings(client, { [field]: url });
+    }
+    await service.clearPublicReference(client, current, persist);
+    refreshPublicWebsite(); revalidatePath("/admin/website-settings");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof service.PublicMediaCleanupError) {
+      refreshPublicWebsite(); revalidatePath("/admin/website-settings");
+      return { ok: false, error: error.message, referenceCleared: true };
+    }
+    return { ok: false, error: errorText(error, "Could not remove media.") };
+  }
 }
 
 async function uploadPrivate(domain: "students" | "staff", id: string, data: FormData): Promise<MediaActionResult> {
