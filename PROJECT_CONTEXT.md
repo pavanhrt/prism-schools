@@ -26,19 +26,25 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 - **Status**: Feature-complete for Phases 1–10 of the blueprint (see §5).
   Builds, type-checks, and passes its test suite. **Not deployed anywhere.**
-- **Commit history**: 3 commits total — `Initial commit from Create Next
-  App`, then one large commit (`School OS: full build, Phases 1-10`) that
-  built the entire system in one session, then a README commit. There is no
-  granular history to `git blame` for "why did module X change" — the
-  architecture decisions live in this doc, the README, and comments in the
-  SQL migrations themselves.
-- **Scale**: 29 ordered Postgres migrations, 19 feature modules, 28 admin
-  routes, ~13,800 lines of TypeScript/TSX across `app/` and `features/`, 53
+- **Commit history**: starts with `Initial commit from Create Next App`,
+  then one large commit (`School OS: full build, Phases 1-10`) that built
+  the entire system in one session, then incremental commits (README,
+  `PROJECT_CONTEXT.md`, a schema fix, the first PDF document type — see
+  `git log` for the current tip). There is limited granular history to
+  `git blame` for "why did module X change" from the Phase 1-10 commit
+  itself — those architecture decisions live in this doc, the README, and
+  comments in the SQL migrations.
+- **Scale**: 30 ordered Postgres migrations, 19 feature modules, 28 admin
+  routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 53
   unit tests (14 test files) covering integrity-critical logic only — not
   UI, not CRUD happy-paths.
 - **Known gaps** — deliberately deferred, each needing its own scoped pass:
-  - **PDF generation**: report cards, admit cards, receipts, payslips, ID
-    cards, transfer certificates. Data is correct; nothing renders to paper.
+  - **PDF generation**: report cards, admit cards, payslips, ID cards,
+    transfer certificates still don't render to paper. **Fee receipts are
+    done** (`app/api/fees/receipts/[paymentId]/route.ts` +
+    `features/fees/pdf/receipt-document.tsx`, using `@react-pdf/renderer`)
+    — this is the reference pattern for the remaining document types; see
+    §10.
   - **File uploads**: `photo_url` / `attachment_url` columns exist in the
     schema, but no Supabase Storage buckets are created or wired up.
   - **Live SMS/WhatsApp**: template + logging infrastructure exists for SMS;
@@ -220,7 +226,57 @@ functions/tables from earlier ones — `has_permission()`, `is_admin()`,
 Commands: `npm run dev`, `npm run build` (also type-checks), `npm run test`
 (Vitest), `npm run lint`, `npx tsc --noEmit`.
 
-## 9. Working conventions for AI assistants on this repo
+## 9. Known risks
+
+- **`.env.local` is tracked in git** (`git ls-files | grep env` will show
+  it) and a real Supabase `anon` key and `SUPABASE_SERVICE_ROLE_KEY` were
+  committed to `origin/master` on 2026-08-22, before this repo had any
+  `.gitignore` protection for it. The keys have since been rotated, but the
+  old values are still recoverable from git history on GitHub, and the file
+  is still tracked today — `git rm --cached .env.local` (keeping the local
+  file) has not been done yet. Do this, and confirm no other secret ended
+  up committed the same way, before this repo is made public or handed to
+  anyone outside the current owner.
+
+## 10. Next steps — planned enhancements
+
+In rough priority order; each is independent and can be picked up without
+the others.
+
+1. **Finish PDF generation** (§2). Fee receipts are done — reuse that exact
+   pattern (Route Handler + `@react-pdf/renderer` document component,
+   gated by the resource's existing RLS `select` policy rather than a hard
+   `requirePermission` call) for:
+   - Report cards (needs exam results + grade scale assembled per student
+     per term — the most complex of the remaining ones)
+   - Admit cards (exam schedule + student + hall/seat if that's tracked)
+   - Payslips (payroll run + `payroll_adjustments` ledger — similar shape
+     to fee receipts)
+   - ID cards (needs a student/staff photo — blocked on file uploads, #2,
+     unless shipped photo-less first)
+   - Transfer certificates (student + enrollment history + admission info)
+2. **File uploads.** Wire up Supabase Storage buckets for
+   `photo_url`/`attachment_url` (students, staff, library books, etc.).
+   Needed for ID cards with photos and for any document-attachment UI.
+3. **Bulk class promotion.** `student_enrollments` already supports this
+   (Phase 2's whole point) — add an admin action that inserts a new
+   enrollment row per student in a class/section for the next academic
+   year, leaving prior rows untouched (never update-in-place — that's the
+   exact legacy bug this schema exists to prevent).
+4. **Live SMS/WhatsApp.** SMS template + logging infrastructure exists
+   (Phase 7); connect a real provider (e.g. Twilio) the same way Resend is
+   wired for email. WhatsApp has no infrastructure yet.
+5. **Deployment.** Docker + Nginx + HTTPS (or a simpler managed host) for
+   the Next.js app against Supabase Cloud; no CI/CD or monitoring exists
+   yet. Do the `.env.local` git cleanup (§9) as part of this, not after.
+6. **Manual QA of remaining flows.** The admin/portal route sweep (all 33
+   routes load cleanly, no console errors) and one real create-flow
+   (class → section → student → fee type → fee structure → invoice →
+   payment → receipt) have been verified end-to-end. Exam results entry,
+   payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
+   have not yet been exercised with real data.
+
+## 11. Working conventions for AI assistants on this repo
 
 - **Read `AGENTS.md` first, every session.** It's auto-regenerated by
   `next dev` and states this Next.js version has training-data-breaking API
