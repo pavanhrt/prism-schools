@@ -26,7 +26,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
-  **Phase 4 (Public Website Transformation)**. Builds, type-checks, and
+  **Phase 5 (Website Configuration/CMS)**. Builds, type-checks, and
   passes its test suite. The public website is deployed on Netlify from the
   `prismschool` branch at `https://prismschools.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
@@ -64,9 +64,9 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   - **Bulk class promotion**: the schema supports it (`student_enrollments`
     is designed for exactly this), but there's no "promote this whole class
     to next year" UI action yet — promotion currently happens per-student.
-  - **Public website configuration**: a school website CMS, admin website
-    editor, dynamic programs/services configuration, and Supabase Storage/media
-    uploads remain deferred. Public content is intentionally code-owned for now.
+  - **Public website media**: Supabase Storage, upload controls, and advanced
+    editorial media management remain deferred. Phase 5 supports validated
+    public URL/path fields only.
   - **Multi-school architecture**: remains explicitly deferred; School OS is a
     single-school system.
   - **Deployment architecture**: the public website currently deploys to
@@ -301,10 +301,10 @@ the others.
    payment → receipt) have been verified end-to-end. Exam results entry,
    payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
    have not yet been exercised with real data.
-7. **Public website Phase 5.** Add CMS/configuration, an admin website editor,
-   dynamic programs/services, and authentic school media through Supabase
-   Storage only as separately scoped work. Multi-school architecture remains
-   out of scope.
+7. **Public website Phase 6.** Add Supabase Storage/media management and upload
+   controls for authentic school media as separately scoped work. Dynamic
+   programs/services are already configuration-backed in Phase 5. Multi-school
+   architecture remains out of scope.
 
 ## 11. Working conventions for AI assistants on this repo
 
@@ -337,6 +337,7 @@ the others.
 - Phase 2 — Premium Hero/Banner: Complete
 - Phase 3 — Future Learning Home Experience: Complete
 - Phase 4 — Public Website Transformation: Complete
+- Phase 5 — Website Configuration/CMS: Complete
 
 Current public deployment:
 
@@ -512,3 +513,52 @@ Current public deployment:
   expose them. Gallery copy was polished with parent-facing language about the
   authentic school moments this space will bring together as the community
   grows. This final polish made no database migration or Supabase schema change.
+
+### Phase 5 Website Configuration/CMS (completed 2026-08-23)
+
+- Migration `supabase/migrations/0031_phase5_website_cms.sql` extends the
+  existing `school_settings` row (`id = 1`) and creates `website_programs`,
+  `website_services`, and `website_features`. These are single-school public
+  website configuration tables; there is no school/tenant key.
+- Operational School OS data (`classes`, students, enrollments, fees, exams)
+  remains distinct from public website marketing content (brand/hero/contact/
+  SEO settings, programs, future-learning services, and Why PRISM features).
+  Backend test classes never flow into the marketing collections.
+- The migration is additive and preserves existing settings. Approved PRISM
+  defaults are idempotently seeded. Collection indexes support active display
+  ordering, and all new tables have updated-at triggers and RLS enabled.
+- Anonymous users receive column-scoped SELECT access to intended public
+  `school_settings` fields and active collection rows only. Inactive content is
+  visible through `website_settings.read`; collection mutations require
+  `website_settings.manage`. Direct operational settings updates remain under
+  `settings.manage`; CMS setting writes use the permission-checked,
+  field-allowlisted `update_website_settings(jsonb)` database function.
+  `super_admin` and `school_admin` receive both website permissions through the
+  idempotent permission catalog/grants.
+- The CMS flow is: Admin → Server Action → Settings Service → Settings
+  Repository → Supabase/RLS → cache revalidation → Public Website. Every
+  protected action checks permission first, parses Zod input second, and then
+  delegates to the service. Normal CMS reads/writes use session/anon clients;
+  the service-role client is not used.
+- `/admin/website-settings` provides focused Branding, Hero, Contact, Social,
+  SEO, Academic Programs, Future Learning, and Why PRISM sections. Collections
+  support add/edit/order/visibility/delete, with confirmed hard delete and
+  soft-disable available. Media fields accept validated URL/path text only;
+  Storage and uploads remain Phase 6.
+- Public pages retain the approved Phase 1–4 visual components while receiving
+  configuration through `features/public/repository.ts` and `service.ts`.
+  Header/footer/hero/contact and the public program/service/feature sections are
+  configuration-backed with production-safe fallbacks.
+- Public configuration uses Next.js 16 tagged caching with a one-hour safety
+  refresh. Successful admin Server Actions immediately expire the shared tag
+  and revalidate public routes, sitemap, and robots; content changes therefore
+  require no Git commit or Netlify code deployment.
+- Default metadata, canonical/base URL, favicon, Open Graph/Twitter values, and
+  `EducationalOrganization` structured data use configured factual fields only.
+- Deployment remains Netlify from branch `prismschool` at
+  `https://prismschools.netlify.app/`. Code changes require a branch push;
+  subsequent CMS content changes flow through Supabase and revalidation.
+- Deferred roadmap: Phase 6 — Supabase Storage/media management; Phase 7 —
+  advanced admin media/content experience; Phase 8 — SEO/performance/
+  accessibility deep QA as needed; Phase 9 — security/regression/production
+  hardening; future — multi-school architecture.

@@ -2,8 +2,8 @@ import Link from "next/link";
 import { ArrowRight, Mail, MapPin, Phone } from "lucide-react";
 
 interface ContactDetailsProps {
-  address: string;
-  email: string;
+  address: string | null;
+  email: string | null;
   phone: string | null;
 }
 
@@ -23,15 +23,15 @@ export function ContactDetails({ address, email, phone }: ContactDetailsProps) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+          {address && <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-prism-bg text-prism-navy">
               <MapPin className="h-5 w-5" aria-hidden="true" />
             </span>
             <h3 className="mt-5 text-lg font-semibold text-prism-navy">Visit PRISM</h3>
             <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{address}</p>
-          </article>
+          </article>}
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+          {email && <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-prism-bg text-prism-navy">
               <Mail className="h-5 w-5" aria-hidden="true" />
             </span>
@@ -39,7 +39,7 @@ export function ContactDetails({ address, email, phone }: ContactDetailsProps) {
             <a href={`mailto:${email}`} className="mt-2 block break-all rounded-sm text-sm font-medium leading-6 text-prism-navy underline decoration-prism-gold underline-offset-4 transition-colors hover:text-prism-navy-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-navy focus-visible:ring-offset-2">
               {email}
             </a>
-          </article>
+          </article>}
 
           {phone && (
             <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">

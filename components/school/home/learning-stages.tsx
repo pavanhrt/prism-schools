@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { SectionHeading } from "@/components/school/home/section-heading";
+import type { PublicWebsiteProgram } from "@/features/public/types";
 
 const stages = [
   {
@@ -26,7 +27,17 @@ const stages = [
   },
 ];
 
-export function LearningStages() {
+export function LearningStages({ programs }: { programs: PublicWebsiteProgram[] }) {
+  const visibleStages = programs.map((program, index) => {
+    const approved = stages.find((stage) => stage.level === program.title) || stages[index];
+    return {
+    number: String(index + 1).padStart(2, "0"),
+    level: program.level || program.title,
+    title: program.headline || program.title,
+    description: program.short_description || program.description || "",
+    areas: approved?.areas || [],
+  }});
+  const renderedStages = visibleStages.length ? visibleStages : stages;
   return (
     <section id="learning" className="overflow-hidden bg-white py-20 sm:py-24 lg:py-32" aria-labelledby="learning-title">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
@@ -40,7 +51,7 @@ export function LearningStages() {
         </div>
 
         <div className="mt-12 border-y border-slate-200 lg:mt-16">
-          {stages.map((stage, index) => (
+          {renderedStages.map((stage, index) => (
             <article key={stage.level} className="stage-row grid gap-7 py-9 sm:py-11 lg:grid-cols-[0.22fr_0.78fr_1.1fr] lg:gap-10 lg:py-12">
               <div className="flex items-start justify-between lg:block">
                 <span className="font-mono text-xs text-slate-400">{stage.number}</span>

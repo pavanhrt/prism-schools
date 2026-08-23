@@ -38,6 +38,11 @@ const NAV: { href: string; label: string; permission: string | null }[] = [
   { href: "/admin/hostel", label: "Hostel", permission: "hostel.view" },
   { href: "/admin/transport", label: "Transport", permission: "transport.view" },
   { href: "/admin/inventory", label: "Inventory", permission: "inventory.view" },
+  {
+    href: "/admin/website-settings",
+    label: "School Website Settings",
+    permission: "website_settings.read",
+  },
   { href: "/admin/settings/roles", label: "Roles & Users", permission: "roles.view" },
 ];
 

@@ -1,5 +1,6 @@
 import { Bot, BrainCircuit, Lightbulb, Network } from "lucide-react";
 import { SectionHeading } from "@/components/school/home/section-heading";
+import type { PublicWebsiteService } from "@/features/public/types";
 
 const experiences = [
   { title: "AI & Technology", description: "Students explore artificial intelligence, digital tools, coding and emerging technologies through practical learning experiences.", Icon: BrainCircuit, visual: "network" },
@@ -8,7 +9,16 @@ const experiences = [
   { title: "Real-World Skills", description: "Students apply classroom knowledge to projects, challenges and practical situations that prepare them for the real world.", Icon: Network, visual: "systems" },
 ];
 
-export function BeyondTextbooks() {
+const icons = { bot: Bot, brain: BrainCircuit, lightbulb: Lightbulb, network: Network };
+const serviceIcons = { "ai-and-technology": BrainCircuit, "robotics-and-makers": Bot, "creative-thinking": Lightbulb, "real-world-skills": Network };
+
+export function BeyondTextbooks({ services }: { services: PublicWebsiteService[] }) {
+  const visibleExperiences = services.length ? services.map((service) => ({
+    title: service.title,
+    description: service.short_description || service.description || "",
+    Icon: icons[(service.icon || "").toLowerCase() as keyof typeof icons] || serviceIcons[service.slug as keyof typeof serviceIcons] || Network,
+    visual: service.visual_type || "systems",
+  })) : experiences;
   return (
     <section id="future-learning" className="future-learning-section overflow-hidden py-20 sm:py-24 lg:py-32" aria-labelledby="future-learning-title">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
@@ -17,7 +27,7 @@ export function BeyondTextbooks() {
         </div>
 
         <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-white/10 bg-white/10 md:grid-cols-2 lg:mt-18">
-          {experiences.map(({ title, description, Icon, visual }, index) => (
+          {visibleExperiences.map(({ title, description, Icon, visual }, index) => (
             <article key={title} className="future-experience relative min-h-[25rem] overflow-hidden bg-prism-navy p-7 sm:p-9 lg:p-11">
               <div className={`future-experience__visual future-experience__visual--${visual}`} aria-hidden="true">
                 <span /><span /><span /><span />

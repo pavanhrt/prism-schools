@@ -4,17 +4,19 @@ import { ArrowRight } from "lucide-react";
 import { AcademicHero } from "@/components/school/academics/academic-hero";
 import { AcademicStages } from "@/components/school/academics/academic-stages";
 import { LearningApproach } from "@/components/school/academics/learning-approach";
+import { getPublicSchoolWebsiteConfig } from "@/features/public/service";
 
 export const metadata: Metadata = {
   title: "Academics",
   description: "Explore the PRISM academic approach: strong foundations, purposeful learning and future-ready capabilities.",
 };
 
-export default function AcademicsPage() {
+export default async function AcademicsPage() {
+  const { programs } = await getPublicSchoolWebsiteConfig();
   return (
     <div className="overflow-hidden bg-white">
       <AcademicHero />
-      <AcademicStages />
+      <AcademicStages programs={programs} />
       <LearningApproach />
       <section className="bg-white px-5 py-20 sm:px-8 sm:py-24 lg:px-10 lg:py-28">
         <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-prism-navy px-6 py-12 text-white shadow-[0_30px_80px_rgba(7,26,61,0.16)] sm:px-10 sm:py-14 lg:flex lg:items-center lg:justify-between lg:gap-12 lg:px-14">

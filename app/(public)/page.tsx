@@ -6,17 +6,19 @@ import { LearningStages } from "@/components/school/home/learning-stages";
 import { ParentMessage } from "@/components/school/home/parent-message";
 import { TechnologyExperiences } from "@/components/school/home/technology-experiences";
 import { WhyPrism } from "@/components/school/home/why-prism";
+import { getPublicSchoolWebsiteConfig } from "@/features/public/service";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const config = await getPublicSchoolWebsiteConfig();
   return (
     <div className="flex flex-col">
-      <HeroBanner />
-      <LearningStages />
-      <BeyondTextbooks />
+      <HeroBanner settings={config.settings} />
+      <LearningStages programs={config.programs} />
+      <BeyondTextbooks services={config.services} />
       <FutureReady />
       <LearningJourney />
       <TechnologyExperiences />
-      <WhyPrism />
+      <WhyPrism features={config.features} />
       <ParentMessage />
     </div>
   );
