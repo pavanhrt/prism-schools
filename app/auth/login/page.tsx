@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SchoolLogo } from "@/components/school/school-logo";
+import { PRISM_SCHOOL_NAME } from "@/components/school/brand";
 
 export default function LoginPage() {
   const [serverError, setServerError] = useState<string | null>(null);
@@ -33,7 +34,7 @@ export default function LoginPage() {
       <SchoolLogo size={64} preload />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in to PRISM SCHOOLS</CardTitle>
+          <CardTitle>Sign in to {PRISM_SCHOOL_NAME}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">

@@ -1,13 +1,5 @@
 import Link from "next/link";
-import type { Metadata } from "next";
 import { PRISM_SCHOOL_NAME, PRISM_TAGLINE } from "@/components/school/brand";
-
-export function generateMetadata(): Metadata {
-  return {
-    title: PRISM_SCHOOL_NAME,
-    description: `${PRISM_SCHOOL_NAME} — ${PRISM_TAGLINE}.`,
-  };
-}
 
 export default function HomePage() {
   return (

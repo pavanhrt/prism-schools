@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getSchoolSettings } from "@/features/settings/repository";
 import { SiteHeader } from "@/components/school/site-header";
 import { SiteFooter } from "@/components/school/site-footer";
-import { PRISM_SCHOOL_NAME } from "@/components/school/brand";
+import { PRISM_SCHOOL_NAME, PRISM_TAGLINE } from "@/components/school/brand";
 
 const NAV = [
   { href: "/", label: "Home" },
@@ -13,6 +14,14 @@ const NAV = [
   { href: "/admissions", label: "Admissions" },
   { href: "/contact", label: "Contact" },
 ];
+
+export const metadata: Metadata = {
+  title: {
+    default: `${PRISM_SCHOOL_NAME} — ${PRISM_TAGLINE}`,
+    template: `%s | ${PRISM_SCHOOL_NAME}`,
+  },
+  description: `${PRISM_SCHOOL_NAME} — ${PRISM_TAGLINE}.`,
+};
 
 export default async function PublicLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
@@ -26,11 +35,11 @@ export default async function PublicLayout({ children }: { children: ReactNode }
       >
         Skip to main content
       </a>
-      <SiteHeader schoolName={PRISM_SCHOOL_NAME} nav={NAV} />
+      <SiteHeader nav={NAV} />
 
       <main id="main-content" className="flex-1">{children}</main>
 
-      <SiteFooter schoolName={PRISM_SCHOOL_NAME} settings={settings} exploreLinks={NAV} />
+      <SiteFooter settings={settings} exploreLinks={NAV} />
     </div>
   );
 }

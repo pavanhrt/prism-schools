@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SchoolLogo } from "@/components/school/school-logo";
 import type { SchoolSettings } from "@/types/settings";
-import { PRISM_TAGLINE } from "@/components/school/brand";
+import { PRISM_SCHOOL_NAME, PRISM_TAGLINE } from "@/components/school/brand";
 
 interface FooterLink {
   href: string;
@@ -9,12 +9,11 @@ interface FooterLink {
 }
 
 interface SiteFooterProps {
-  schoolName: string;
   settings: SchoolSettings;
   exploreLinks: FooterLink[];
 }
 
-export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterProps) {
+export function SiteFooter({ settings, exploreLinks }: SiteFooterProps) {
   const hasContactDetails = settings.address || settings.contact_phone || settings.contact_email;
 
   return (
@@ -24,7 +23,7 @@ export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterPro
           <div className="flex items-center gap-3">
             <SchoolLogo size={44} onDark />
             <div>
-              <p className="text-base font-semibold text-white">{schoolName}</p>
+              <p className="text-base font-semibold text-white">{PRISM_SCHOOL_NAME}</p>
               <p className="text-xs font-medium uppercase tracking-wide text-prism-gold">
                 {PRISM_TAGLINE}
               </p>
@@ -68,7 +67,7 @@ export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterPro
 
       <div className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-5 py-5 text-xs text-slate-400">
-          © {new Date().getFullYear()} {schoolName}. All rights reserved.
+          © {new Date().getFullYear()} {PRISM_SCHOOL_NAME}. All rights reserved.
         </div>
       </div>
     </footer>

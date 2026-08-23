@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PRISM_SCHOOL_NAME } from "@/components/school/brand";
 import { SchoolLogo } from "@/components/school/school-logo";
 
 interface NavItem {
@@ -13,11 +14,10 @@ interface NavItem {
 }
 
 interface SiteHeaderProps {
-  schoolName: string;
   nav: NavItem[];
 }
 
-export function SiteHeader({ schoolName, nav }: SiteHeaderProps) {
+export function SiteHeader({ nav }: SiteHeaderProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -48,7 +48,7 @@ export function SiteHeader({ schoolName, nav }: SiteHeaderProps) {
         >
           <SchoolLogo size={44} preload />
           <span className="hidden text-base font-semibold tracking-tight text-prism-navy sm:inline">
-            {schoolName}
+            {PRISM_SCHOOL_NAME}
           </span>
         </Link>
 
