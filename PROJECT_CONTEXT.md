@@ -702,11 +702,12 @@ Current public deployment:
   the temporary Phase 6 gallery record/object still awaits explicit deletion
   confirmation. Phase 8 recommendations are limited to a dedicated SEO,
   Lighthouse, Core Web Vitals, WCAG, and bundle-optimization audit.
-- **Current production deployment validation (2026-08-23)**: the new Netlify
-  site `prismschoolnew` is ready from branch `prismschool` at commit
-  `e898de8f49ba9bf132901f51625e22049a620208`, deploy
-  `6a8ae2799dd71d8b4400c68f`. All tested public, admin, robots, and sitemap
-  routes returned HTTP 401 because site-level access protection is enabled;
-  public availability must not be claimed until that protection is disabled.
-  `school_settings.website_url` was checked through the anonymous/RLS path and
-  is `null`, so the CMS does not retain the old URL.
+- **Current production deployment validation (2026-08-23)**: the Netlify site
+  `prismschoolnew` is public and ready from branch `prismschool` at commit
+  `41fd22f3e056a5bcabb9e755ffa54ec771fd2485`, deploy
+  `6a8ae42317d62300088050b1`. `/`, `/about`, `/academics`, `/admissions`,
+  `/gallery`, `/contact`, `/sitemap.xml`, and `/robots.txt` returned HTTP 200;
+  `/admin/website-settings` returned the expected HTTP 307 redirect to
+  `/auth/login`. Site-level access protection was disabled.
+  `school_settings.website_url` remains `null` and does not retain the old
+  hostname.
