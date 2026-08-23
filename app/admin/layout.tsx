@@ -40,7 +40,7 @@ const NAV: { href: string; label: string; permission: string | null }[] = [
   { href: "/admin/inventory", label: "Inventory", permission: "inventory.view" },
   {
     href: "/admin/website-settings",
-    label: "School Website Settings",
+    label: "Website Management",
     permission: "website_settings.read",
   },
   { href: "/admin/settings/roles", label: "Roles & Users", permission: "roles.view" },
@@ -58,8 +58,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white p-4">
+    <div className="min-h-screen bg-slate-50 lg:flex">
+      <aside className="flex max-h-64 w-full flex-col overflow-y-auto border-b border-slate-200 bg-white p-4 lg:max-h-none lg:min-h-screen lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
         <p className="mb-6 px-2 text-lg font-semibold text-slate-900">School OS</p>
         <nav className="flex flex-1 flex-col gap-1">
           {visibleNav.map((item) => (
@@ -78,7 +78,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Button>
         </form>
       </aside>
-      <main className="flex-1 p-8">{children}</main>
+      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
     </div>
   );
 }

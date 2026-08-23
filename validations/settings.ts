@@ -24,6 +24,12 @@ export const websiteProgramSchema = z.object({ title: requiredText(120), slug, l
 export const websiteServiceSchema = z.object({ title: requiredText(120), slug, short_description: optionalText(500), description: optionalText(3000), icon: optionalText(80), visual_type: optionalText(80), visual_asset_url: optionalAssetPath, display_order: displayOrder, is_active: z.boolean() });
 export const websiteFeatureSchema = z.object({ title: requiredText(120), description: requiredText(1000), icon: optionalText(80), display_order: displayOrder, is_active: z.boolean() });
 export const websiteRecordIdSchema = z.string().uuid();
+export const websiteCollectionSchema = z.enum(["programs", "services", "features", "gallery"]);
+export const websiteReorderSchema = z.object({
+  collection: websiteCollectionSchema,
+  id: websiteRecordIdSchema,
+  direction: z.enum(["up", "down"]),
+});
 export type SchoolSettingsUpdateInput = z.infer<typeof schoolSettingsUpdateSchema>;
 export type WebsiteProgramInput = z.infer<typeof websiteProgramSchema>;
 export type WebsiteServiceInput = z.infer<typeof websiteServiceSchema>;

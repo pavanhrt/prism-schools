@@ -15,6 +15,7 @@ import {
   updateWebsiteFeatureAction,
   updateWebsiteProgramAction,
   updateWebsiteServiceAction,
+  reorderWebsiteCollectionAction,
 } from "@/features/settings/actions";
 import type {
   SchoolSettings,
@@ -43,7 +44,7 @@ import { GalleryManager } from "@/features/media/components/gallery-manager";
 
 type SettingsSection = "branding" | "hero" | "contact" | "social" | "seo";
 type CollectionSection = "programs" | "services" | "features";
-type Section = SettingsSection | CollectionSection | "gallery";
+export type Section = SettingsSection | CollectionSection | "gallery";
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "branding", label: "Branding" },
@@ -60,7 +61,7 @@ const SECTIONS: { key: Section; label: string }[] = [
 const SETTINGS_FIELDS: Record<SettingsSection, (keyof SchoolSettingsUpdateInput)[]> = {
   branding: ["school_name", "short_name", "tagline", "logo_url", "favicon_url", "primary_color", "secondary_color", "accent_color"],
   hero: ["hero_eyebrow", "hero_tagline", "hero_title", "hero_description", "hero_primary_cta_label", "hero_primary_cta_url", "hero_secondary_cta_label", "hero_secondary_cta_url"],
-  contact: ["contact_email", "contact_phone", "website_url", "address_line", "city", "district", "state", "country", "postal_code", "google_maps_url"],
+  contact: ["contact_email", "contact_phone", "website_url", "address_line", "city", "district", "state", "country", "postal_code", "google_maps_url", "facebook_url", "instagram_url", "youtube_url", "linkedin_url"],
   social: ["facebook_url", "instagram_url", "youtube_url", "linkedin_url"],
   seo: ["seo_title", "seo_description", "og_image_url"],
 };
@@ -123,9 +124,11 @@ function SettingsEditor({ settings, canManage, section }: { settings: SchoolSett
                 {multiline ? (
                   <textarea id={name} rows={4} disabled={!canManage} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:bg-slate-50 disabled:text-slate-500" {...register(name)} />
                 ) : (
-                  <Input id={name} disabled={!canManage} type={name.includes("email") ? "email" : "text"} {...register(name)} />
+                  <div className="flex items-center gap-2"><Input id={name} disabled={!canManage} type={name.includes("color") ? "color" : name.includes("email") ? "email" : "text"} {...register(name)} />{name.includes("color") && <span className="text-xs text-slate-500">{String(getValues(name) ?? "")}</span>}</div>
                 )}
                 {error && <p className="text-xs text-red-600">{String(error)}</p>}
+                {name === "seo_title" && <p className="text-xs text-slate-500">Aim for 50–60 characters. Current: {String(getValues(name) ?? "").length}.</p>}
+                {name === "seo_description" && <p className="text-xs text-slate-500">Aim for 140–160 characters. Current: {String(getValues(name) ?? "").length}.</p>}
               </div>
             );
           })}
@@ -190,18 +193,37 @@ function CollectionManager({ kind, records, canManage }: { kind: CollectionSecti
     });
   }
 
+  function reorder(record: CollectionRecord, direction: "up" | "down") {
+    setError(null);
+    startTransition(async () => {
+      const result = await reorderWebsiteCollectionAction({ collection: kind, id: record.id, direction });
+      setError(result.ok ? "Order saved successfully." : result.error);
+      if (result.ok) router.refresh();
+    });
+  }
+
+  function setActive(record: CollectionRecord) {
+    startTransition(async () => {
+      const input = Object.fromEntries(Object.entries({ ...record, is_active: !record.is_active }).map(([key, value]) => [key, value ?? ""]));
+      const result = kind === "programs" ? await updateWebsiteProgramAction(record.id, input as WebsiteProgramInput) : kind === "services" ? await updateWebsiteServiceAction(record.id, input as WebsiteServiceInput) : await updateWebsiteFeatureAction(record.id, input as WebsiteFeatureInput);
+      setError(result.ok ? `${record.title} is now ${record.is_active ? "hidden" : "visible"}.` : result.error);
+      if (result.ok) router.refresh();
+    });
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <Card>
         <CardHeader><div><CardTitle>{COLLECTION_COPY[kind].title}</CardTitle><p className="mt-1 text-sm text-slate-500">{COLLECTION_COPY[kind].description}</p></div></CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {records.map((record) => (
+          {records.map((record, index) => (
             <div key={record.id} className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div><div className="flex flex-wrap items-center gap-2"><p className="font-medium text-slate-900">{record.title}</p><Badge variant={record.is_active ? "success" : "outline"}>{record.is_active ? "active" : "hidden"}</Badge><Badge variant="outline">order {record.display_order}</Badge></div><p className="mt-1 line-clamp-2 text-sm text-slate-500">{record.description || ("short_description" in record ? record.short_description : null) || "No description"}</p></div>
-              {canManage && <div className="flex shrink-0 gap-2"><Button size="sm" variant="outline" disabled={pending} onClick={() => setEditing(record)}>Edit</Button><Button size="sm" variant="destructive" disabled={pending} onClick={() => remove(record)}>Delete</Button></div>}
+              {canManage && <div className="flex shrink-0 flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pending || index === 0} onClick={() => reorder(record, "up")}>Move Up</Button><Button size="sm" variant="outline" disabled={pending || index === records.length - 1} onClick={() => reorder(record, "down")}>Move Down</Button><Button size="sm" variant="outline" disabled={pending} onClick={() => setActive(record)}>{record.is_active ? "Disable" : "Enable"}</Button><Button size="sm" variant="outline" disabled={pending} onClick={() => setEditing(record)}>Edit</Button><Button size="sm" variant="destructive" disabled={pending} onClick={() => remove(record)}>Delete</Button></div>}
             </div>
           ))}
-          {records.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No content yet.</p>}
+          {records.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{kind === "programs" ? "No public academic programs configured. Add the first marketing program; operational classes stay separate." : "No public content configured yet. Add the first entry."}</p>}
+          {error && <p aria-live="polite" className={error.includes("successfully") || error.includes(" is now ") ? "text-sm text-emerald-700" : "text-sm text-red-600"}>{error}</p>}
         </CardContent>
       </Card>
       {canManage && <Card key={editKey} className="h-fit">
@@ -216,7 +238,7 @@ function CollectionManager({ kind, records, canManage }: { kind: CollectionSecti
             <Field name="icon" label="Icon or visual identifier" defaultValue={editing?.icon ?? ""} />
             {kind === "programs" && <Field name="image_url" label="Image URL or path" defaultValue={(editing && "image_url" in editing ? editing.image_url : "") ?? ""} />}
             {kind === "services" && <><Field name="visual_type" label="Visual type" defaultValue={(editing && "visual_type" in editing ? editing.visual_type : "") ?? ""} /><Field name="visual_asset_url" label="Asset URL or path" defaultValue={(editing && "visual_asset_url" in editing ? editing.visual_asset_url : "") ?? ""} /></>}
-            <Field name="display_order" label="Display order" type="number" min={0} required defaultValue={editing?.display_order ?? 0} />
+            <input name="display_order" type="hidden" value={editing?.display_order ?? records.length} />
             <label className="flex items-center gap-2 text-sm text-slate-700"><input name="is_active" type="checkbox" defaultChecked={editing?.is_active ?? true} /> Visible on public website</label>
             {error && <p aria-live="polite" className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-2"><Button type="submit" disabled={pending}>{pending ? "Saving…" : editing ? "Save changes" : "Add entry"}</Button>{editing && <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>}</div>
@@ -254,4 +276,12 @@ export function WebsiteSettingsManager({ config, canManage }: { config: WebsiteA
       {section === "gallery" && <GalleryManager items={config.gallery} canManage={canManage} />}
     </div>
   );
+}
+
+export function FocusedWebsiteManager({ config, canManage, section }: { config: WebsiteAdminConfig; canManage: boolean; section: Section }) {
+  if (section === "branding" || section === "hero" || section === "contact" || section === "social" || section === "seo") return <SettingsEditor settings={config.settings} canManage={canManage} section={section} />;
+  if (section === "programs") return <CollectionManager kind="programs" records={config.programs} canManage={canManage} />;
+  if (section === "services") return <CollectionManager kind="services" records={config.services} canManage={canManage} />;
+  if (section === "features") return <CollectionManager kind="features" records={config.features} canManage={canManage} />;
+  return <GalleryManager items={config.gallery} canManage={canManage} />;
 }

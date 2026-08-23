@@ -43,3 +43,22 @@ export const deleteWebsiteFeature = (s: SupabaseClient, id: string) => deleteRow
 export const insertWebsiteGalleryItem = (s: SupabaseClient, i: Record<string, unknown>) => insertRow<WebsiteGalleryItem>(s, "website_gallery_items", i);
 export const updateWebsiteGalleryItem = (s: SupabaseClient, id: string, i: Record<string, unknown>) => updateRow<WebsiteGalleryItem>(s, "website_gallery_items", id, i);
 export const deleteWebsiteGalleryItem = (s: SupabaseClient, id: string) => deleteRow(s, "website_gallery_items", id);
+
+export async function updateWebsiteDisplayOrders(
+  s: SupabaseClient,
+  table: "website_programs" | "website_services" | "website_features" | "website_gallery_items",
+  updates: { id: string; display_order: number }[],
+): Promise<void> {
+  await Promise.all(updates.map(async ({ id, display_order }) => {
+    const { error } = await s.from(table).update({ display_order }).eq("id", id);
+    if (error) throw error;
+  }));
+}
+
+/** Minimal projection used by media reference analysis. */
+export async function listPublicMediaReferences(s: SupabaseClient) {
+  const [settings, programs, services, gallery] = await Promise.all([
+    getSchoolSettings(s), listWebsitePrograms(s), listWebsiteServices(s), listWebsiteGalleryItems(s),
+  ]);
+  return { settings, programs, services, gallery };
+}

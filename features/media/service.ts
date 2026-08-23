@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as repository from "./repository";
-import { PRIVATE_MEDIA_BUCKET, PUBLIC_MEDIA_BUCKET, type PublicMediaCategory, type StoredMedia, type WebsiteGalleryItem } from "@/types/media";
+import { PRIVATE_MEDIA_BUCKET, PUBLIC_MEDIA_BUCKET, type MediaCleanupResult, type PublicMediaAsset, type PublicMediaCategory, type PublicMediaLibrary, type PublicMediaUsage, type PublicMediaUsageKind, type StoredMedia, type WebsiteGalleryItem } from "@/types/media";
 import type { GalleryItemInput, GalleryItemUpdateInput } from "@/validations/media";
 import * as settingsRepository from "@/features/settings/repository";
 
@@ -54,10 +54,78 @@ export function managedPathFromPublicUrl(value: string | null): string | null {
   return isManagedPath(PUBLIC_MEDIA_BUCKET, path) ? path : null;
 }
 
-function managedPathForClient(s: SupabaseClient, value: string | null): string | null {
+export function canonicalManagedPathFromPublicUrl(s: SupabaseClient, value: string | null): string | null {
   if (!value) return null;
-  const bucketBaseUrl = repository.getPublicUrl(s, PUBLIC_MEDIA_BUCKET, "");
-  return value.startsWith(bucketBaseUrl) ? managedPathFromPublicUrl(value) : null;
+  const path = managedPathFromPublicUrl(value);
+  if (!path) return null;
+  return repository.getPublicUrl(s, PUBLIC_MEDIA_BUCKET, path) === value ? path : null;
+}
+
+function usageCategory(path: string): PublicMediaUsageKind {
+  if (path.startsWith("hero/")) return "hero";
+  if (path.startsWith("programs/")) return "program";
+  if (path.startsWith("services/")) return "future-learning";
+  if (path.startsWith("gallery/")) return "gallery";
+  if (path.startsWith("branding/og/")) return "seo";
+  return "branding";
+}
+
+async function referenceMap(s: SupabaseClient): Promise<Map<string, PublicMediaUsage[]>> {
+  const refs = await settingsRepository.listPublicMediaReferences(s);
+  const map = new Map<string, PublicMediaUsage[]>();
+  const addUrl = (url: string | null, usage: PublicMediaUsage) => {
+    const path = canonicalManagedPathFromPublicUrl(s, url);
+    if (path) map.set(path, [...(map.get(path) ?? []), usage]);
+  };
+  addUrl(refs.settings.logo_url, { kind: "branding", label: "School logo", entityId: null });
+  addUrl(refs.settings.favicon_url, { kind: "branding", label: "Favicon", entityId: null });
+  addUrl(refs.settings.hero_image_url, { kind: "hero", label: "Home hero", entityId: null });
+  addUrl(refs.settings.og_image_url, { kind: "seo", label: "Open Graph image", entityId: null });
+  for (const item of refs.programs) addUrl(item.image_url, { kind: "program", label: item.title, entityId: item.id });
+  for (const item of refs.services) addUrl(item.visual_asset_url, { kind: "future-learning", label: item.title, entityId: item.id });
+  for (const item of refs.gallery) {
+    const path = isManagedPath(PUBLIC_MEDIA_BUCKET, item.storage_path) ? item.storage_path : canonicalManagedPathFromPublicUrl(s, item.image_url);
+    if (path) map.set(path, [...(map.get(path) ?? []), { kind: "gallery", label: item.title, entityId: item.id }]);
+  }
+  return map;
+}
+
+async function listLeafFolder(s: SupabaseClient, folder: string, paths: Map<string, repository.PublicStorageObject>, state: { truncated: boolean }) {
+  const entries = await repository.listPublicFolder(s, folder);
+  if (entries.length === 100) state.truncated = true;
+  for (const entry of entries) {
+    const path = `${folder}/${entry.name}`;
+    if (entry.id && isManagedPath(PUBLIC_MEDIA_BUCKET, path)) paths.set(path, entry);
+  }
+}
+
+export async function listPublicMediaLibrary(s: SupabaseClient): Promise<PublicMediaLibrary> {
+  const paths = new Map<string, repository.PublicStorageObject>();
+  const state = { truncated: false };
+  await Promise.all(["branding/logo", "branding/favicon", "branding/og", "hero", "gallery"].map((folder) => listLeafFolder(s, folder, paths, state)));
+  for (const root of ["programs", "services"] as const) {
+    const folders = await repository.listPublicFolder(s, root);
+    if (folders.length === 100) state.truncated = true;
+    await Promise.all(folders.filter((entry) => !entry.id && /^[0-9a-f-]{36}$/.test(entry.name)).map((entry) => listLeafFolder(s, `${root}/${entry.name}`, paths, state)));
+  }
+  const usages = await referenceMap(s);
+  const assets: PublicMediaAsset[] = [...paths].map(([path, entry]) => {
+    const extension = path.slice(path.lastIndexOf(".") + 1) as PublicMediaAsset["extension"];
+    const assetUsages = usages.get(path) ?? [];
+    return { path, url: repository.getPublicUrl(s, PUBLIC_MEDIA_BUCKET, path), filename: entry.name, extension, category: usageCategory(path), size: entry.metadata?.size ?? null, createdAt: entry.created_at, usages: assetUsages, isUnused: assetUsages.length === 0 };
+  }).toSorted((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || a.path.localeCompare(b.path));
+  return { assets, truncated: state.truncated };
+}
+
+async function removePublicObjectIfUnused(s: SupabaseClient, path: string): Promise<"deleted" | "used"> {
+  if (!isManagedPath(PUBLIC_MEDIA_BUCKET, path)) throw new Error("Invalid managed public media path.");
+  if ((await referenceMap(s)).has(path)) return "used";
+  await repository.removePublicObject(s, path);
+  return "deleted";
+}
+
+export async function deleteUnusedPublicMedia(s: SupabaseClient, path: string): Promise<void> {
+  if ((await removePublicObjectIfUnused(s, path)) === "used") throw new Error("This image is still in use and cannot be deleted.");
 }
 
 export async function uploadPublicMedia(s: SupabaseClient, category: PublicMediaCategory, file: File, id?: string): Promise<StoredMedia> {
@@ -87,8 +155,8 @@ export async function replacePublicReference(
   const media = await uploadPublicMedia(s, category, file, id);
   try { await persist(media.url!); }
   catch (error) { await repository.removeObject(s, media.bucket, media.path).catch(() => undefined); throw error; }
-  const oldPath = managedPathForClient(s, currentValue);
-  if (oldPath && oldPath !== media.path) await repository.removeObject(s, PUBLIC_MEDIA_BUCKET, oldPath).catch(() => undefined);
+  const oldPath = canonicalManagedPathFromPublicUrl(s, currentValue);
+  if (oldPath && oldPath !== media.path) await removePublicObjectIfUnused(s, oldPath).catch(() => undefined);
   return media;
 }
 
@@ -103,13 +171,29 @@ export async function clearPublicReference(
   persist: (url: string | null) => Promise<unknown>,
 ): Promise<void> {
   await persist(null);
-  const oldPath = managedPathForClient(s, currentValue);
+  const oldPath = canonicalManagedPathFromPublicUrl(s, currentValue);
   if (!oldPath) return;
   try {
-    await repository.removeObject(s, PUBLIC_MEDIA_BUCKET, oldPath);
+    await removePublicObjectIfUnused(s, oldPath);
   } catch {
     throw new PublicMediaCleanupError("Media reference was cleared, but the managed file could not be deleted. Please try cleanup again later.");
   }
+}
+
+export async function reusePublicMedia(
+  s: SupabaseClient,
+  path: string,
+  currentValue: string | null,
+  persist: (url: string) => Promise<unknown>,
+): Promise<StoredMedia> {
+  if (!isManagedPath(PUBLIC_MEDIA_BUCKET, path)) throw new Error("Choose a managed public image.");
+  const exists = (await listPublicMediaLibrary(s)).assets.some((asset) => asset.path === path);
+  if (!exists) throw new Error("The selected public image is no longer available.");
+  const url = repository.getPublicUrl(s, PUBLIC_MEDIA_BUCKET, path);
+  await persist(url);
+  const oldPath = canonicalManagedPathFromPublicUrl(s, currentValue);
+  if (oldPath && oldPath !== path) await removePublicObjectIfUnused(s, oldPath).catch(() => undefined);
+  return { bucket: PUBLIC_MEDIA_BUCKET, path, url };
 }
 
 export async function replacePrivatePhoto(
@@ -123,7 +207,8 @@ export async function replacePrivatePhoto(
   const media = await uploadPrivatePhoto(s, domain, id, file);
   try { await persist(media.path); }
   catch (error) { await repository.removeObject(s, media.bucket, media.path).catch(() => undefined); throw error; }
-  if (currentPath && isManagedPath(PRIVATE_MEDIA_BUCKET, currentPath) && currentPath !== media.path) {
+  const exactPrefix = `${domain}/${id}/photos/`;
+  if (currentPath?.startsWith(exactPrefix) && isManagedPath(PRIVATE_MEDIA_BUCKET, currentPath) && currentPath !== media.path) {
     await repository.removeObject(s, PRIVATE_MEDIA_BUCKET, currentPath).catch(() => undefined);
   }
   return media;
@@ -137,10 +222,23 @@ export async function createGalleryItem(s: SupabaseClient, input: GalleryItemInp
   try { return await settingsRepository.insertWebsiteGalleryItem(s, { ...input, caption: input.caption || null, category: input.category || null, storage_path: media.path, image_url: media.url! }); }
   catch (error) { await repository.removeObject(s, PUBLIC_MEDIA_BUCKET, media.path).catch(() => undefined); throw error; }
 }
+export async function createGalleryItemFromExisting(s: SupabaseClient, input: GalleryItemInput, path: string): Promise<WebsiteGalleryItem> {
+  if (!isManagedPath(PUBLIC_MEDIA_BUCKET, path)) throw new Error("Choose a managed public image.");
+  const exists = (await listPublicMediaLibrary(s)).assets.some((asset) => asset.path === path);
+  if (!exists) throw new Error("The selected public image is no longer available.");
+  return settingsRepository.insertWebsiteGalleryItem(s, { ...input, caption: input.caption || null, category: input.category || null, storage_path: path, image_url: repository.getPublicUrl(s, PUBLIC_MEDIA_BUCKET, path) });
+}
 export const updateGalleryItem = (s: SupabaseClient, id: string, input: GalleryItemUpdateInput) => settingsRepository.updateWebsiteGalleryItem(s, id, input);
-export async function deleteGalleryItem(s: SupabaseClient, id: string) {
+export async function deleteGalleryItem(s: SupabaseClient, id: string): Promise<MediaCleanupResult> {
   const item = (await settingsRepository.listWebsiteGalleryItems(s)).find((entry) => entry.id === id);
   if (!item) throw new Error("Gallery item not found.");
   await settingsRepository.deleteWebsiteGalleryItem(s, id);
-  if (isManagedPath(PUBLIC_MEDIA_BUCKET, item.storage_path)) await repository.removeObject(s, PUBLIC_MEDIA_BUCKET, item.storage_path);
+  if (!isManagedPath(PUBLIC_MEDIA_BUCKET, item.storage_path)) return { databaseDeleted: true, storageDeleted: false, storageRetainedBecauseUsed: false };
+  try {
+    const cleanup = await removePublicObjectIfUnused(s, item.storage_path);
+    return { databaseDeleted: true, storageDeleted: cleanup === "deleted", storageRetainedBecauseUsed: cleanup === "used" };
+  } catch (error) {
+    console.error("Gallery database row deleted but managed media cleanup failed", { galleryItemId: id, storagePath: item.storage_path, error });
+    return { databaseDeleted: true, storageDeleted: false, storageRetainedBecauseUsed: false, cleanupWarning: "Gallery item was deleted, but its unused image could not be cleaned up." };
+  }
 }

@@ -26,9 +26,11 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
-  **Phase 6 (Supabase Storage / Media Management)**. Builds, type-checks, and
-  passes its test suite. The public website is deployed on Netlify from the
-  `prismschool` branch at `https://prismschools.netlify.app/`.
+  **Phase 7 (Advanced Admin Content & Media Experience)**. Phase 7 is
+  implementation-complete and pending production deployment. It builds,
+  type-checks, and passes its test suite. The currently deployed public website
+  remains on Netlify from the `prismschool` branch at
+  `https://prismschools.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
   navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
   the server-rendered `Where Learning Meets the Future` experience, the
@@ -46,9 +48,9 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   `git blame` for "why did module X change" from the Phase 1-10 commit
   itself — those architecture decisions live in this doc, the README, and
   comments in the SQL migrations.
-- **Scale**: 33 ordered Postgres migrations, 20 feature modules, 28 admin
-  routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 67
-  unit tests (18 test files) covering integrity-critical logic only — not
+- **Scale**: 33 ordered Postgres migrations, 20 feature modules, 67 generated
+  application routes, ~13,800+ lines of TypeScript/TSX across `app/` and
+  `features/`, 84 unit tests (20 test files) covering integrity-critical logic — not
   UI, not CRUD happy-paths.
 - **Known gaps** — deliberately deferred, each needing its own scoped pass:
   - **PDF generation**: report cards, admit cards, payslips, ID cards,
@@ -301,10 +303,9 @@ the others.
    payment → receipt) have been verified end-to-end. Exam results entry,
    payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
    have not yet been exercised with real data.
-7. **Phase 7 media follow-up.** Extend the scoped Phase 6 foundation only when
-   a real workflow requires document attachments, library media, or advanced
-   editorial tooling. Video uploads/transcoding, SVG uploads, and a generic
-   media library remain out of scope. Multi-school architecture remains deferred.
+7. **Phase 8 website quality audit.** Run a dedicated SEO, Lighthouse, Core Web
+   Vitals, WCAG, and bundle-optimization audit. Keep this as a focused measurement
+   and remediation pass rather than expanding website content or media scope.
 
 ## 11. Working conventions for AI assistants on this repo
 
@@ -594,10 +595,10 @@ Current public deployment:
 - Final local validation passed: lint reported zero errors and the same six
   pre-existing React Hook Form compiler warnings, TypeScript passed, all 57
   tests in 16 files passed, and the production build generated all 58 routes.
-- Deferred roadmap: Phase 7 —
-  advanced admin media/content experience; Phase 8 — SEO/performance/
-  accessibility deep QA as needed; Phase 9 — security/regression/production
-  hardening; future — multi-school architecture.
+- Deferred roadmap: Phase 7 advanced admin media/content experience is now
+  implementation-complete and pending production deployment. Phase 8 is limited
+  to a dedicated SEO, Lighthouse, Core Web Vitals, WCAG, and bundle-optimization
+  audit.
 
 ### Phase 6 Supabase Storage / Media Management (completed/deployed 2026-08-23)
 
@@ -632,7 +633,7 @@ Current public deployment:
   host and the two exact Storage URL path families.
 - Student and staff detail pages provide permission-scoped private photo upload,
   replacement, and signed preview. Expense/library/document attachment workflows,
-  SVG, video, a generic media library, and automated orphan collection remain Phase 7.
+  SVG, video, and automated orphan collection remain deferred.
 - Local validation: lint passed with the same six pre-existing React Hook Form
   compiler warnings; `tsc --noEmit` passed; 67 tests in 18 files passed; and the
   Next.js production build generated all 58 routes. Build-time Supabase reads were
@@ -641,5 +642,55 @@ Current public deployment:
   commit, `9e853eff34b708464ffdcd18c1df4ed6b0233832`, was pushed to `prismschool`;
   and the Netlify production deploy was ready for that exact commit. `/` and
   `/gallery` returned 200, while `/admin/website-settings` redirected
-  unauthenticated requests to login. No authentic media was uploaded during
-  automated validation, and no service-role client was used.
+  unauthenticated requests to login. Automated validation uploaded no authentic
+  media. During production validation, an authorized logged-in administrator
+  manually uploaded the supplied temporary JPEG to both Hero and Gallery. The Hero
+  reference was later cleared and its managed Hero object was confirmed deleted.
+  The Gallery record and object remain as a temporary Phase 6 validation item and
+  must not be represented as approved PRISM content. Student/staff upload E2E was
+  not performed, and full temporary-media cleanup must not be claimed. These normal
+  administrator media operations used no service-role client.
+
+### Phase 7 Advanced Admin Content & Media Experience (implementation complete; pending production deployment)
+
+- Website Management is now organized into focused admin routes for Overview,
+  Branding, Homepage, Programs, Future Learning, Why PRISM, Gallery,
+  Contact/Social, SEO, and Media rather than one oversized editing surface.
+  The overview provides section status cards, operational guidance, and direct
+  public preview links so administrators can move between editing and the
+  corresponding public experience.
+- Ordered website collections expose accessible, normalized Move Up and Move Down
+  controls. Reordering is handled through the existing settings action/service/
+  repository boundaries, keeps positions contiguous, and retains clear disabled
+  states and accessible labels at collection boundaries.
+- The Media route is a derived, public-only media library assembled from existing
+  website settings, programs, services, and gallery references. It does not list
+  or expose private student/staff media and introduces no generic Storage-object
+  browser or new source of truth.
+- Existing public media can be safely reused from the library in supported website
+  fields. Deletion is usage-aware: referenced media is identified and protected
+  from unsafe removal, while eligible managed public objects can be deleted through
+  the existing permission-checked media service. Private-media paths and URLs are
+  excluded at the validation, repository, service, and presentation boundaries.
+- Gallery management improves editorial status, preview, ordering, reuse, and
+  deletion feedback while retaining meaningful alt text, publication visibility,
+  and confirmed destructive actions. The temporary Phase 6 Gallery validation item
+  remains validation-only and is not approved PRISM content.
+- Phase 7 preserves the established architecture: components call Server Actions;
+  actions check `website_settings.read` or `website_settings.manage` as appropriate
+  and validate input; services enforce ordering, safe reuse, media-boundary, usage,
+  and cleanup rules; repositories perform raw Supabase operations under existing
+  RLS. Normal administrator operations continue to use the session-bound client,
+  never the service-role client.
+- No database, schema, migration, permission catalog/grant, or RLS policy changed.
+  Phase 7 uses the existing website permissions and Storage policies and remains a
+  single-school implementation.
+- Existing cache behavior is unchanged: successful website mutations continue to
+  expire the shared public website configuration tag and revalidate the existing
+  public routes, sitemap, and robots targets.
+- Validation passed: `npm run lint` completed with zero errors and six pre-existing
+  React Hook Form compiler warnings; `npx tsc --noEmit` passed; `npm run test`
+  passed all 84 tests in 20 files; and `npm run build` passed and generated all
+  67 routes.
+- Production deployment is still pending. Phase 8 recommendations are limited to
+  a dedicated SEO, Lighthouse, Core Web Vitals, WCAG, and bundle-optimization audit.
