@@ -14,7 +14,7 @@ export default function AdmissionsPage() {
         Tell us a bit about your child and we&apos;ll reach out to guide you through the
         admissions process — from enquiry, to application, to enrollment.
       </p>
-      <div className="mt-8 rounded-lg border border-slate-200 p-6">
+      <div className="mt-8 rounded-lg border border-slate-200 p-4 sm:p-6">
         <EnquiryForm />
       </div>
     </div>

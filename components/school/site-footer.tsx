@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SchoolLogo } from "@/components/school/school-logo";
 import type { SchoolSettings } from "@/types/settings";
+import { PRISM_TAGLINE } from "@/components/school/brand";
 
 interface FooterLink {
   href: string;
@@ -25,7 +26,7 @@ export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterPro
             <div>
               <p className="text-base font-semibold text-white">{schoolName}</p>
               <p className="text-xs font-medium uppercase tracking-wide text-prism-gold">
-                A Modern Legacy of Learning
+                {PRISM_TAGLINE}
               </p>
             </div>
           </div>
@@ -37,11 +38,11 @@ export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterPro
         </div>
 
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Explore</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Explore</h2>
           <ul className="mt-4 flex flex-col gap-2.5">
             {exploreLinks.map((item) => (
               <li key={item.href}>
-                <Link href={item.href} className="text-sm text-slate-300 transition-colors hover:text-prism-gold">
+                <Link href={item.href} className="rounded-sm text-sm text-slate-300 transition-colors hover:text-prism-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-gold focus-visible:ring-offset-2 focus-visible:ring-offset-prism-navy">
                   {item.label}
                 </Link>
               </li>
@@ -50,14 +51,14 @@ export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterPro
         </div>
 
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Get in Touch</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Get in Touch</h2>
           <ul className="mt-4 flex flex-col gap-2.5 text-sm text-slate-300">
             {settings.address && <li>{settings.address}</li>}
-            {settings.contact_phone && <li>{settings.contact_phone}</li>}
-            {settings.contact_email && <li>{settings.contact_email}</li>}
-            {!hasContactDetails && <li className="text-slate-500">Contact details coming soon.</li>}
+            {settings.contact_phone && <li className="break-words"><a className="rounded-sm hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-gold" href={`tel:${settings.contact_phone}`}>{settings.contact_phone}</a></li>}
+            {settings.contact_email && <li className="break-words"><a className="rounded-sm hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-gold" href={`mailto:${settings.contact_email}`}>{settings.contact_email}</a></li>}
+            {!hasContactDetails && <li>Our team would be glad to hear from you.</li>}
             <li>
-              <Link href="/contact" className="text-prism-gold transition-colors hover:text-white">
+              <Link href="/contact" className="rounded-sm text-prism-gold transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-gold focus-visible:ring-offset-2 focus-visible:ring-offset-prism-navy">
                 Contact page →
               </Link>
             </li>
@@ -66,7 +67,7 @@ export function SiteFooter({ schoolName, settings, exploreLinks }: SiteFooterPro
       </div>
 
       <div className="border-t border-white/10">
-        <div className="mx-auto max-w-6xl px-5 py-5 text-xs text-slate-500">
+        <div className="mx-auto max-w-6xl px-5 py-5 text-xs text-slate-400">
           © {new Date().getFullYear()} {schoolName}. All rights reserved.
         </div>
       </div>

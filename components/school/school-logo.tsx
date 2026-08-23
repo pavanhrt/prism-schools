@@ -7,17 +7,17 @@ interface SchoolLogoProps {
   /** Set when the logo sits on a dark (navy) background — adds a light backing panel for contrast. */
   onDark?: boolean;
   className?: string;
-  priority?: boolean;
+  preload?: boolean;
 }
 
-export function SchoolLogo({ size = 48, onDark = false, className, priority }: SchoolLogoProps) {
+export function SchoolLogo({ size = 48, onDark = false, className, preload }: SchoolLogoProps) {
   const image = (
     <Image
       src="/branding/prism-logo.png"
       alt="PRISM SCHOOLS — A Modern Legacy of Learning"
       width={1254}
       height={1254}
-      priority={priority}
+      preload={preload}
       className={cn("h-full w-auto object-contain", !onDark && className)}
       style={{ height: size, width: "auto" }}
     />

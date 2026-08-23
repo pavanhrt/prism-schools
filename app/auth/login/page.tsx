@@ -30,7 +30,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-prism-bg px-4">
-      <SchoolLogo size={64} priority />
+      <SchoolLogo size={64} preload />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in to PRISM SCHOOLS</CardTitle>

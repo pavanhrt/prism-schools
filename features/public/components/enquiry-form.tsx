@@ -44,7 +44,7 @@ export function EnquiryForm() {
 
   if (status === "success") {
     return (
-      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm text-emerald-700">
+      <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-6 text-center text-sm text-emerald-700">
         Thank you — we&apos;ve received your enquiry and someone from our admissions team
         will be in touch soon.
       </div>
@@ -53,32 +53,34 @@ export function EnquiryForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="student_name">Student name</Label>
-          <Input id="student_name" {...register("student_name")} />
-          {errors.student_name && <p className="text-xs text-red-600">{errors.student_name.message}</p>}
+          <Input id="student_name" aria-invalid={Boolean(errors.student_name)} aria-describedby={errors.student_name ? "student_name-error" : undefined} {...register("student_name")} />
+          {errors.student_name && <p id="student_name-error" className="text-xs text-red-600">{errors.student_name.message}</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="parent_name">Your name</Label>
-          <Input id="parent_name" {...register("parent_name")} />
-          {errors.parent_name && <p className="text-xs text-red-600">{errors.parent_name.message}</p>}
+          <Input id="parent_name" aria-invalid={Boolean(errors.parent_name)} aria-describedby={errors.parent_name ? "parent_name-error" : undefined} {...register("parent_name")} />
+          {errors.parent_name && <p id="parent_name-error" className="text-xs text-red-600">{errors.parent_name.message}</p>}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" {...register("phone")} />
-          {errors.phone && <p className="text-xs text-red-600">{errors.phone.message}</p>}
+          <Input id="phone" aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? "phone-error" : undefined} {...register("phone")} />
+          {errors.phone && <p id="phone-error" className="text-xs text-red-600">{errors.phone.message}</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">Email (optional)</Label>
-          <Input id="email" type="email" {...register("email")} />
+          <Input id="email" type="email" aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? "email-error" : undefined} {...register("email")} />
+          {errors.email && <p id="email-error" className="text-xs text-red-600">{errors.email.message}</p>}
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="message">Message (optional)</Label>
-        <textarea id="message" rows={3} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" {...register("message")} />
+        <textarea id="message" rows={3} aria-invalid={Boolean(errors.message)} aria-describedby={errors.message ? "message-error" : undefined} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-navy" {...register("message")} />
+        {errors.message && <p id="message-error" className="text-xs text-red-600">{errors.message.message}</p>}
       </div>
       {/* Honeypot — hidden from real visitors via CSS, not display:none
           (which some bots skip), and never receives keyboard/tab focus. */}
@@ -86,8 +88,8 @@ export function EnquiryForm() {
         <label htmlFor="website">Leave this field blank</label>
         <input id="website" type="text" tabIndex={-1} autoComplete="off" {...register("website")} />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={isSubmitting} className="self-start">
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      <Button type="submit" disabled={isSubmitting} className="self-start bg-prism-navy text-white hover:bg-prism-navy-light focus-visible:ring-prism-navy">
         {isSubmitting ? "Sending…" : "Send enquiry"}
       </Button>
     </form>

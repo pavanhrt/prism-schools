@@ -29,7 +29,9 @@ export default async function AcademicsPage() {
           ))}
         </div>
       ) : (
-        <p className="mt-3 text-sm text-slate-500">Class list coming soon.</p>
+        <p className="mt-3 text-sm text-slate-600">
+          Please contact our admissions team for current class availability.
+        </p>
       )}
     </div>
   );
