@@ -24,8 +24,16 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 ## 2. Current state (as of 2026-08-23)
 
-- **Status**: Feature-complete for Phases 1–10 of the blueprint (see §5).
-  Builds, type-checks, and passes its test suite. **Not deployed anywhere.**
+- **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
+  (see §5). The PRISM public website transformation is complete through
+  **Phase 2 (premium Home hero)**. Builds, type-checks, and passes its test
+  suite. **Not deployed anywhere.**
+- **Current public website**: Phase 1 established the shared PRISM SCHOOLS
+  navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
+  the server-rendered `Where Learning Meets the Future` experience, the
+  `A Modern Legacy of Learning` tagline, future-learning message, two valid
+  route CTAs, and a CSS-only prism/light visual. Phase 3 Home sections remain
+  intentionally deferred.
 - **Commit history**: starts with `Initial commit from Create Next App`,
   then one large commit (`School OS: full build, Phases 1-10`) that built
   the entire system in one session, then incremental commits (README,
@@ -36,7 +44,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   comments in the SQL migrations.
 - **Scale**: 30 ordered Postgres migrations, 19 feature modules, 28 admin
   routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 53
-  unit tests (14 test files) covering integrity-critical logic only — not
+  unit tests (15 test files) covering integrity-critical logic only — not
   UI, not CRUD happy-paths.
 - **Known gaps** — deliberately deferred, each needing its own scoped pass:
   - **PDF generation**: report cards, admit cards, payslips, ID cards,
@@ -52,6 +60,10 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   - **Bulk class promotion**: the schema supports it (`student_enrollments`
     is designed for exactly this), but there's no "promote this whole class
     to next year" UI action yet — promotion currently happens per-student.
+  - **PRISM public website Phase 3**: academic-stage redesign, Beyond
+    Textbooks, AI & Technology, Robotics, Creative Thinking, Real-World
+    Skills, Learning by Doing, Technology Lab, Why PRISM, parent messaging,
+    and public CMS/configuration remain intentionally deferred.
   - **Deployment**: nothing is deployed. Target is Supabase Cloud (managed
     Postgres/Auth) + Next.js self-hosted via Docker + Nginx + HTTPS. No
     Docker/Nginx config, CI/CD, or monitoring exists yet.
@@ -80,6 +92,12 @@ app/
 ├── portal/       Student/parent portal (attendance, exams, fees, homework, notices)
 ├── api/          Route Handlers: Razorpay webhook, public enquiry form
 └── auth/         Login/logout
+
+components/school/
+├── hero/          Phase 2 Home hero content + decorative prism visual
+├── site-header.tsx
+├── site-footer.tsx
+└── school-logo.tsx
 
 features/<module>/          # 19 modules — see §4.3 for the list
 ├── repository.ts           # raw Supabase queries, ZERO business logic
@@ -275,6 +293,11 @@ the others.
    payment → receipt) have been verified end-to-end. Exam results entry,
    payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
    have not yet been exercised with real data.
+7. **PRISM public website Phase 3.** Build the deferred Home content sections:
+   academic stages, Beyond Textbooks, AI & Technology, Robotics, Creative
+   Thinking, Real-World Skills, Learning by Doing, Technology Lab, Why PRISM,
+   parent messaging, and the final CTA. CMS/configuration and multi-school
+   architecture remain out of scope unless separately approved.
 
 ## 11. Working conventions for AI assistants on this repo
 
@@ -298,3 +321,36 @@ the others.
 - **Add a unit test only for integrity-critical logic** (derived values,
   state transitions, signature verification, RBAC scoping) — the existing
   `tests/unit/` suite deliberately skips UI and CRUD happy-path tests.
+
+## 12. PRISM public website state
+
+### Phase 2 Home hero (completed 2026-08-23)
+
+- `app/(public)/page.tsx` composes `components/school/hero/hero-banner.tsx`;
+  the page remains a Server Component.
+- `hero-banner.tsx` owns the accessible hero content and existing-route CTAs:
+  `Explore Our School` links to `/about`, and `Discover Future Learning`
+  links to `/academics`.
+- `hero-visual.tsx` is a decorative, screen-reader-hidden prism of future
+  learning with restrained AI, robotics, science, coding, and creativity
+  signals. It uses Lucide icons already present in the dependency graph.
+- Motion is CSS-only in `app/globals.css`: a finite staggered content reveal,
+  a slow transform-only visual drift, and opacity-only light-beam breathing.
+  No animation dependency, canvas, WebGL, video, or new media asset was added.
+- The existing global `prefers-reduced-motion: reduce` rule collapses all hero
+  animations to a complete near-static state. The hero does not depend on
+  animation for meaning or visibility.
+- Responsive behavior was rendered at 4K, 1440, 1280, 1024, 768, 430, 390,
+  375, and 320 pixels. Mobile places brand, headline, supporting message, and
+  CTAs before a simplified visual; device emulation confirmed no horizontal
+  overflow at 430/390/375/320.
+- Phase 2 reused `components/school/brand.ts`, the Phase 1 public header and
+  footer, existing routes, Tailwind CSS, and `lucide-react`. It did not modify
+  the supplied PRISM logo.
+- Validation: `npm run lint` passed with zero errors and six pre-existing
+  React Hook Form compiler warnings outside the public hero; `npx tsc
+  --noEmit` passed; `npm run test` passed all 53 tests in 15 files; and
+  `npm run build` passed with all 57 routes generated.
+- **Database**: Phase 2 introduced no database migration or Supabase schema
+  change. Supabase RLS, authentication, admin, portal, repositories, services,
+  Server Actions, and existing School OS workflows remain unchanged.
