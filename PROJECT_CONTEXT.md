@@ -404,3 +404,31 @@ Current public deployment:
 - **Database**: Phase 3 introduced no database migration or Supabase schema
   change. Supabase RLS, authentication, RBAC, admin, portal, and backend
   business logic remain unchanged.
+
+### Phase 3 polish pass (completed 2026-08-23)
+
+- Replaced the internal-sounding physical-facility disclaimer in the
+  technology section with parent-facing language about practical, creative,
+  hands-on exploration. The capability names remain AI Learning, Robotics,
+  Coding, Innovation, Maker Experiences, and Digital Creativity; none are
+  presented as confirmed physical labs.
+- Refined all seven section eyebrows into warmer, authored transitions:
+  `Growing with every stage`, `Learning beyond the expected`, `A mindset for
+  what comes next`, `Curiosity into capability`, `Ideas into action`, `The
+  PRISM difference`, and `Built around your child`.
+- Removed visible numeric markers from the Learning by Doing journey so its
+  connected path and ASK → EXPLORE → EXPERIMENT → CREATE → BUILD → SOLVE →
+  PRESENT → LEAD sequence carry the hierarchy. Step order remains available
+  to assistive technology.
+- Strengthened the parent close with a clearer two-part composition and three
+  durable student outcomes, while retaining its valid `/about` CTA and using
+  no media or new dependency.
+- Confirmed the legacy Academics/Admissions/Community Home strip was already
+  removed by the initial Phase 3 implementation; useful Academics and About
+  routes remain available through intentional Home CTAs.
+- Validation: `npm run lint` passed with zero errors and six pre-existing React
+  Hook Form compiler warnings; `npx tsc --noEmit` passed; `npm run test` passed
+  all 53 tests in 15 files; and `npm run build` passed with all 57 routes.
+- **Database**: the Phase 3 polish pass introduced no database migration or
+  Supabase schema change. RLS, authentication, RBAC, admin, portal, and backend
+  business logic remain unchanged.

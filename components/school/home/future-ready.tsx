@@ -6,7 +6,7 @@ export function FutureReady() {
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:gap-16">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">The PRISM philosophy</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">A mindset for what comes next</p>
             <h2 id="future-ready-title" className="mt-4 max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-prism-navy sm:text-5xl lg:text-6xl">
               Don&apos;t Just Prepare for the Future. <span className="text-prism-navy-light">Build It.</span>
             </h2>

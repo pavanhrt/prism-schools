@@ -401,9 +401,10 @@ body {
   top: 1.75rem;
   right: 6%;
   left: 6%;
-  height: 1px;
+  height: 2px;
   content: "";
-  background: linear-gradient(90deg, transparent, #c9a227 12%, #c9a227 88%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 39, 0.45) 8%, #c9a227 50%, rgba(201, 162, 39, 0.45) 92%, transparent);
+  box-shadow: 0 0 1rem rgba(201, 162, 39, 0.18);
 }
 .learning-journey__icon { transition: border-color 220ms ease, transform 220ms ease, box-shadow 220ms ease; }
 .learning-journey__step:hover .learning-journey__icon {
@@ -433,6 +434,12 @@ body {
   background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: linear-gradient(to right, transparent, black);
+}
+.parent-message__panel {
+  box-shadow: 0 2rem 5rem rgba(7, 26, 61, 0.16);
+}
+.parent-message__outcomes {
+  position: relative;
 }
 .parent-message__orb {
   position: absolute;

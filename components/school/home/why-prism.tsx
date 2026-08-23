@@ -15,7 +15,7 @@ export function WhyPrism() {
     <section className="bg-prism-bg py-20 sm:py-24 lg:py-32" aria-labelledby="why-prism-title">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div>
-          <SectionHeading titleId="why-prism-title" eyebrow="A balanced education" title="Why PRISM?" description="Strong academics are the foundation. Future-ready skills, creativity and confidence help students carry that foundation into a changing world." />
+          <SectionHeading titleId="why-prism-title" eyebrow="The PRISM difference" title="Why PRISM?" description="Strong academics are the foundation. Future-ready skills, creativity and confidence help students carry that foundation into a changing world." />
         </div>
         <div className="mt-14 grid border-l border-t border-slate-200 sm:grid-cols-2 lg:grid-cols-3">
           {reasons.map(({ title, description, Icon }) => (

@@ -33,7 +33,7 @@ export function LearningStages() {
         <div>
           <SectionHeading
             titleId="learning-title"
-            eyebrow="Academic journey"
+            eyebrow="Growing with every stage"
             title="Learning for Every Stage"
             description="PRISM combines age-appropriate academic development with curiosity, creativity and future-ready learning — from a child's first discoveries to confident secondary-school leadership."
           />

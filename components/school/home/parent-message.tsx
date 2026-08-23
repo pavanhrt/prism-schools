@@ -7,9 +7,10 @@ export function ParentMessage() {
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div className="parent-message__panel relative overflow-hidden rounded-3xl bg-prism-navy px-6 py-14 sm:px-10 sm:py-16 lg:px-16 lg:py-20">
           <div className="parent-message__orb" aria-hidden="true" />
-          <div className="relative z-10 max-w-4xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">For parents</p>
-            <h2 id="parent-message-title" className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
+          <div className="relative z-10 grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-16">
+            <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">Built around your child</p>
+            <h2 id="parent-message-title" className="mt-4 max-w-4xl text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
               A School for the World Your Child Will Enter
             </h2>
             <p className="mt-6 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
@@ -18,6 +19,23 @@ export function ParentMessage() {
             <Link href="/about" className="mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-prism-gold px-6 py-3 text-sm font-semibold text-prism-navy transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[#d7b43c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-prism-navy">
               Explore Our Approach <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
+            </div>
+
+            <div className="parent-message__outcomes border-t border-white/15 pt-7 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
+              <p className="text-sm font-medium leading-7 text-white">What your child carries forward</p>
+              <ul className="mt-5 grid gap-4 text-sm text-slate-300" aria-label="Student outcomes">
+                {[
+                  "Strong foundations for lifelong learning",
+                  "Confidence to ask, create and contribute",
+                  "Adaptability for a changing world",
+                ].map((outcome) => (
+                  <li key={outcome} className="flex items-start gap-3">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-prism-gold" aria-hidden="true" />
+                    <span>{outcome}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </div>

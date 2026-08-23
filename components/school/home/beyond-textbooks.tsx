@@ -13,7 +13,7 @@ export function BeyondTextbooks() {
     <section id="future-learning" className="future-learning-section overflow-hidden py-20 sm:py-24 lg:py-32" aria-labelledby="future-learning-title">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div>
-          <SectionHeading titleId="future-learning-title" eyebrow="Future learning" title="Beyond Textbooks" description="We don't just teach students what to learn. We teach them how to think, create, build and solve." inverse />
+          <SectionHeading titleId="future-learning-title" eyebrow="Learning beyond the expected" title="Beyond Textbooks" description="We don't just teach students what to learn. We teach them how to think, create, build and solve." inverse />
         </div>
 
         <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-white/10 bg-white/10 md:grid-cols-2 lg:mt-18">

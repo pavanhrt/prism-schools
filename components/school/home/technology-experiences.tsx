@@ -16,9 +16,9 @@ export function TechnologyExperiences() {
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:gap-16">
           <div className="lg:sticky lg:top-28 lg:self-start">
-            <SectionHeading titleId="technology-title" eyebrow="Tools for tomorrow" title="Where Ideas Become Reality" description="From coding and artificial intelligence to robotics and creative technology, students get opportunities to explore the tools shaping the future." inverse />
-            <p className="mt-6 border-l border-prism-gold/60 pl-4 text-xs leading-6 text-slate-400">
-              These are future-learning experiences and capabilities — not claims about dedicated physical rooms.
+            <SectionHeading titleId="technology-title" eyebrow="Ideas into action" title="Where Ideas Become Reality" description="From coding and artificial intelligence to robotics and creative technology, students get opportunities to explore the tools shaping the future." inverse />
+            <p className="mt-6 border-l border-prism-gold/60 pl-4 text-sm leading-7 text-slate-300">
+              Future-focused learning experiences designed to help students explore emerging technologies through practical, creative and hands-on learning.
             </p>
           </div>
 
