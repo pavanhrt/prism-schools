@@ -24,6 +24,11 @@ export async function getStaff(supabase: SupabaseClient, id: string): Promise<St
   return data;
 }
 
+export async function updateStaffPhoto(supabase: SupabaseClient, id: string, photoUrl: string | null): Promise<void> {
+  const { error } = await supabase.from("staff").update({ photo_url: photoUrl }).eq("id", id);
+  if (error) throw error;
+}
+
 export type NewStaff = Omit<
   Staff,
   "id" | "user_id" | "staff_no" | "status" | "photo_url" | "created_at" | "updated_at" | "created_by" | "updated_by"

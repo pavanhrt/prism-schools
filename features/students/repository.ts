@@ -24,6 +24,11 @@ export async function getStudent(
   return data;
 }
 
+export async function updateStudentPhoto(supabase: SupabaseClient, id: string, photoUrl: string | null): Promise<void> {
+  const { error } = await supabase.from("students").update({ photo_url: photoUrl }).eq("id", id);
+  if (error) throw error;
+}
+
 export type NewStudent = Omit<
   Student,
   "id" | "user_id" | "admission_no" | "admission_date" | "status" | "created_at" | "updated_at" | "created_by" | "updated_by"

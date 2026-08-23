@@ -23,6 +23,7 @@ export interface SchoolSettings {
   hero_primary_cta_url: string;
   hero_secondary_cta_label: string;
   hero_secondary_cta_url: string;
+  hero_image_url: string | null;
   contact_email: string | null;
   contact_phone: string | null;
   address: string | null;
@@ -48,4 +49,4 @@ export interface SchoolSettings {
 export interface WebsiteProgram { id: string; title: string; slug: string; level: string | null; headline: string | null; short_description: string | null; description: string | null; icon: string | null; image_url: string | null; display_order: number; is_active: boolean; created_at: string; updated_at: string; }
 export interface WebsiteService { id: string; title: string; slug: string; short_description: string | null; description: string | null; icon: string | null; visual_type: string | null; visual_asset_url: string | null; display_order: number; is_active: boolean; created_at: string; updated_at: string; }
 export interface WebsiteFeature { id: string; title: string; description: string; icon: string | null; display_order: number; is_active: boolean; created_at: string; updated_at: string; }
-export interface WebsiteAdminConfig { settings: SchoolSettings; programs: WebsiteProgram[]; services: WebsiteService[]; features: WebsiteFeature[]; }
+export interface WebsiteAdminConfig { settings: SchoolSettings; programs: WebsiteProgram[]; services: WebsiteService[]; features: WebsiteFeature[]; gallery: import("@/types/media").WebsiteGalleryItem[]; }

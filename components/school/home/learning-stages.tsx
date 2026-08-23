@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { SectionHeading } from "@/components/school/home/section-heading";
 import type { PublicWebsiteProgram } from "@/features/public/types";
+import Image from "next/image";
 
 const stages = [
   {
@@ -10,6 +11,7 @@ const stages = [
     title: "Curiosity Starts Here",
     description: "Building confidence, curiosity, communication and foundational skills through play, exploration and discovery.",
     areas: ["Early Learning", "Activity-Based Learning", "Communication", "Creativity", "Social Skills", "Motor Development"],
+    image: null,
   },
   {
     number: "02",
@@ -17,6 +19,7 @@ const stages = [
     title: "Building Strong Foundations",
     description: "Developing strong academic foundations while encouraging curiosity, problem solving, creativity and independent thinking.",
     areas: ["Mathematics", "Science", "Languages", "Technology", "Creative Activities", "Project-Based Learning"],
+    image: null,
   },
   {
     number: "03",
@@ -24,6 +27,7 @@ const stages = [
     title: "Preparing Students for Tomorrow",
     description: "Advanced academic learning combined with technology, innovation, leadership and real-world problem solving.",
     areas: ["Advanced Academics", "STEM", "Coding", "AI", "Robotics", "Research", "Leadership"],
+    image: null,
   },
 ];
 
@@ -36,6 +40,7 @@ export function LearningStages({ programs }: { programs: PublicWebsiteProgram[] 
     title: program.headline || program.title,
     description: program.short_description || program.description || "",
     areas: approved?.areas || [],
+    image: program.image_url,
   }});
   const renderedStages = visibleStages.length ? visibleStages : stages;
   return (
@@ -58,6 +63,7 @@ export function LearningStages({ programs }: { programs: PublicWebsiteProgram[] 
                 <span className="stage-row__line mt-4 hidden h-px w-16 bg-prism-gold lg:block" aria-hidden="true" />
               </div>
               <div>
+                {stage.image && <div className="relative mb-6 aspect-[16/9] overflow-hidden rounded-xl"><Image src={stage.image} alt={`${stage.level} at PRISM`} fill sizes="(max-width: 1024px) 100vw, 40vw" className="object-cover" /></div>}
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">{stage.level}</p>
                 <h3 className="mt-3 text-2xl font-semibold tracking-tight text-prism-navy sm:text-3xl">{stage.title}</h3>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600">{stage.description}</p>

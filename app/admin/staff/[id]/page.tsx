@@ -7,6 +7,7 @@ import { AdjustmentForm } from "@/features/payroll/components/adjustment-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { PrivatePhotoManager } from "@/features/media/components/private-photo-manager";
 
 export default async function StaffDetailPage({
   params,
@@ -19,10 +20,11 @@ export default async function StaffDetailPage({
   const staff = await getStaff(supabase, id);
   if (!staff) notFound();
 
-  const [allLeaveRequests, adjustments, canViewPayroll] = await Promise.all([
+  const [allLeaveRequests, adjustments, canViewPayroll, canEdit] = await Promise.all([
     listLeaveRequests(supabase),
     listAdjustmentsForStaff(supabase, id),
     hasPermission("payroll.approve"),
+    hasPermission("staff.edit"),
   ]);
   const leaveRequests = allLeaveRequests.filter((l) => l.staff_id === id);
 
@@ -34,6 +36,7 @@ export default async function StaffDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Card><CardHeader><CardTitle>Private profile photo</CardTitle></CardHeader><CardContent><PrivatePhotoManager domain="staff" id={id} path={staff.photo_url} canEdit={canEdit} /></CardContent></Card>
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>

@@ -11,6 +11,7 @@ import { GuardiansPanel } from "@/features/students/components/guardians-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { PrivatePhotoManager } from "@/features/media/components/private-photo-manager";
 
 export default async function StudentDetailPage({
   params,
@@ -47,6 +48,7 @@ export default async function StudentDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Card><CardHeader><CardTitle>Private profile photo</CardTitle></CardHeader><CardContent><PrivatePhotoManager domain="students" id={id} path={student.photo_url} canEdit={canEdit} /></CardContent></Card>
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>

@@ -5,6 +5,7 @@ import type {
   PublicWebsiteProgram,
   PublicWebsiteService,
 } from "@/features/public/types";
+import type { WebsiteGalleryItem } from "@/types/media";
 
 export function createPublicClient(): SupabaseClient {
   return createClient(
@@ -19,7 +20,7 @@ export async function getPublicSchoolSettings(
 ): Promise<PublicSchoolSettings | null> {
   const { data, error } = await supabase
     .from("school_settings")
-    .select("id, school_name, short_name, tagline, description, logo_url, favicon_url, primary_color, secondary_color, accent_color, hero_eyebrow, hero_tagline, hero_title, hero_description, hero_primary_cta_label, hero_primary_cta_url, hero_secondary_cta_label, hero_secondary_cta_url, contact_email, contact_phone, website_url, address, address_line, city, district, state, country, postal_code, google_maps_url, facebook_url, instagram_url, youtube_url, linkedin_url, seo_title, seo_description, og_image_url")
+    .select("id, school_name, short_name, tagline, description, logo_url, favicon_url, primary_color, secondary_color, accent_color, hero_eyebrow, hero_tagline, hero_title, hero_description, hero_primary_cta_label, hero_primary_cta_url, hero_secondary_cta_label, hero_secondary_cta_url, hero_image_url, contact_email, contact_phone, website_url, address, address_line, city, district, state, country, postal_code, google_maps_url, facebook_url, instagram_url, youtube_url, linkedin_url, seo_title, seo_description, og_image_url")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
@@ -65,5 +66,11 @@ export async function listActiveWebsiteFeatures(
     .order("title", { ascending: true });
   if (error) throw error;
   if (!data?.length) throw new Error("Public website CMS returned no active features");
+  return data;
+}
+
+export async function listActiveGalleryItems(supabase: SupabaseClient): Promise<WebsiteGalleryItem[]> {
+  const { data, error } = await supabase.from("website_gallery_items").select("*").eq("is_active", true).order("display_order").order("created_at");
+  if (error) throw error;
   return data;
 }

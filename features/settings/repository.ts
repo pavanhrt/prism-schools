@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SchoolSettings, WebsiteFeature, WebsiteProgram, WebsiteService } from "@/types/settings";
+import type { WebsiteGalleryItem } from "@/types/media";
 
 export async function getSchoolSettings(supabase: SupabaseClient): Promise<SchoolSettings> {
   const { data, error } = await supabase
@@ -25,6 +26,7 @@ async function listOrdered<T>(supabase: SupabaseClient, table: string): Promise<
 export const listWebsitePrograms = (s: SupabaseClient) => listOrdered<WebsiteProgram>(s, "website_programs");
 export const listWebsiteServices = (s: SupabaseClient) => listOrdered<WebsiteService>(s, "website_services");
 export const listWebsiteFeatures = (s: SupabaseClient) => listOrdered<WebsiteFeature>(s, "website_features");
+export const listWebsiteGalleryItems = (s: SupabaseClient) => listOrdered<WebsiteGalleryItem>(s, "website_gallery_items");
 
 async function insertRow<T>(s: SupabaseClient, table: string, input: Record<string, unknown>): Promise<T> { const { data, error } = await s.from(table).insert(input).select().single(); if (error) throw error; return data as T; }
 async function updateRow<T>(s: SupabaseClient, table: string, id: string, input: Record<string, unknown>): Promise<T> { const { data, error } = await s.from(table).update(input).eq("id", id).select().single(); if (error) throw error; return data as T; }
@@ -38,3 +40,6 @@ export const deleteWebsiteService = (s: SupabaseClient, id: string) => deleteRow
 export const insertWebsiteFeature = (s: SupabaseClient, i: Record<string, unknown>) => insertRow<WebsiteFeature>(s, "website_features", i);
 export const updateWebsiteFeature = (s: SupabaseClient, id: string, i: Record<string, unknown>) => updateRow<WebsiteFeature>(s, "website_features", id, i);
 export const deleteWebsiteFeature = (s: SupabaseClient, id: string) => deleteRow(s, "website_features", id);
+export const insertWebsiteGalleryItem = (s: SupabaseClient, i: Record<string, unknown>) => insertRow<WebsiteGalleryItem>(s, "website_gallery_items", i);
+export const updateWebsiteGalleryItem = (s: SupabaseClient, id: string, i: Record<string, unknown>) => updateRow<WebsiteGalleryItem>(s, "website_gallery_items", id, i);
+export const deleteWebsiteGalleryItem = (s: SupabaseClient, id: string) => deleteRow(s, "website_gallery_items", id);

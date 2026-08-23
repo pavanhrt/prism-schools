@@ -13,7 +13,7 @@ export const schoolSettingsUpdateSchema = z.object({
   logo_url: optionalAssetPath, favicon_url: optionalAssetPath,
   primary_color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color").optional(), secondary_color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color").optional(), accent_color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color").optional(),
   hero_eyebrow: requiredText(150).optional(), hero_tagline: requiredText(200).optional(), hero_title: requiredText(200).optional(), hero_description: requiredText(1000).optional(),
-  hero_primary_cta_label: requiredText(80).optional(), hero_primary_cta_url: ctaUrl.optional(), hero_secondary_cta_label: requiredText(80).optional(), hero_secondary_cta_url: ctaUrl.optional(),
+  hero_primary_cta_label: requiredText(80).optional(), hero_primary_cta_url: ctaUrl.optional(), hero_secondary_cta_label: requiredText(80).optional(), hero_secondary_cta_url: ctaUrl.optional(), hero_image_url: optionalAssetPath,
   contact_email: z.string().trim().max(254).refine((v) => v === "" || z.string().email().safeParse(v).success, "Enter a valid email").optional(), contact_phone: optionalText(40), website_url: optionalExternalUrl,
   address_line: optionalText(300), city: optionalText(100), district: optionalText(100), state: optionalText(100), country: optionalText(100), postal_code: optionalText(20), google_maps_url: optionalExternalUrl,
   facebook_url: optionalExternalUrl, instagram_url: optionalExternalUrl, youtube_url: optionalExternalUrl, linkedin_url: optionalExternalUrl,

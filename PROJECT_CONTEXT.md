@@ -26,7 +26,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
-  **Phase 5 (Website Configuration/CMS)**. Builds, type-checks, and
+  **Phase 6 (Supabase Storage / Media Management)**. Builds, type-checks, and
   passes its test suite. The public website is deployed on Netlify from the
   `prismschool` branch at `https://prismschools.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
@@ -46,9 +46,9 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   `git blame` for "why did module X change" from the Phase 1-10 commit
   itself — those architecture decisions live in this doc, the README, and
   comments in the SQL migrations.
-- **Scale**: 32 ordered Postgres migrations, 19 feature modules, 28 admin
-  routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 53
-  unit tests (15 test files) covering integrity-critical logic only — not
+- **Scale**: 33 ordered Postgres migrations, 20 feature modules, 28 admin
+  routes, ~13,800+ lines of TypeScript/TSX across `app/` and `features/`, 64
+  unit tests (18 test files) covering integrity-critical logic only — not
   UI, not CRUD happy-paths.
 - **Known gaps** — deliberately deferred, each needing its own scoped pass:
   - **PDF generation**: report cards, admit cards, payslips, ID cards,
@@ -57,16 +57,16 @@ of integrity rules the legacy system violated (see §5). Where this doc says
     `features/fees/pdf/receipt-document.tsx`, using `@react-pdf/renderer`)
     — this is the reference pattern for the remaining document types; see
     §10.
-  - **File uploads**: `photo_url` / `attachment_url` columns exist in the
-    schema, but no Supabase Storage buckets are created or wired up.
+  - **Remaining attachments**: expense attachments and future admission,
+    academic, payroll, and library documents are not yet wired to Storage;
+    Phase 6 intentionally prioritizes public CMS media and student/staff photos.
   - **Live SMS/WhatsApp**: template + logging infrastructure exists for SMS;
     no provider (e.g. Twilio) is connected. WhatsApp hasn't been started.
   - **Bulk class promotion**: the schema supports it (`student_enrollments`
     is designed for exactly this), but there's no "promote this whole class
     to next year" UI action yet — promotion currently happens per-student.
-  - **Public website media**: Supabase Storage, upload controls, and advanced
-    editorial media management remain deferred. Phase 5 supports validated
-    public URL/path fields only.
+  - **Advanced media workflows**: video uploads/transcoding, SVG uploads, a
+    generic media library, and automated orphan collection remain deferred.
   - **Multi-school architecture**: remains explicitly deferred; School OS is a
     single-school system.
   - **Deployment architecture**: the public website currently deploys to
@@ -301,10 +301,10 @@ the others.
    payment → receipt) have been verified end-to-end. Exam results entry,
    payroll runs, attendance-taking, and the portal's Razorpay Pay Now path
    have not yet been exercised with real data.
-7. **Public website Phase 6.** Add Supabase Storage/media management and upload
-   controls for authentic school media as separately scoped work. Dynamic
-   programs/services are already configuration-backed in Phase 5. Multi-school
-   architecture remains out of scope.
+7. **Phase 7 media follow-up.** Extend the scoped Phase 6 foundation only when
+   a real workflow requires document attachments, library media, or advanced
+   editorial tooling. Video uploads/transcoding, SVG uploads, and a generic
+   media library remain out of scope. Multi-school architecture remains deferred.
 
 ## 11. Working conventions for AI assistants on this repo
 
@@ -338,6 +338,7 @@ the others.
 - Phase 3 — Future Learning Home Experience: Complete
 - Phase 4 — Public Website Transformation: Complete
 - Phase 5 — Website Configuration/CMS: Complete
+- Phase 6 — Supabase Storage / Media Management: Complete
 
 Current public deployment:
 
@@ -547,8 +548,8 @@ Current public deployment:
 - `/admin/website-settings` provides focused Branding, Hero, Contact, Social,
   SEO, Academic Programs, Future Learning, and Why PRISM sections. Collections
   support add/edit/order/visibility/delete, with confirmed hard delete and
-  soft-disable available. Media fields accept validated URL/path text only;
-  Storage and uploads remain Phase 6.
+  soft-disable available. Phase 6 retains these URL/path fields for compatibility
+  and adds scoped upload controls alongside them.
 - Public pages retain the approved Phase 1–4 visual components while receiving
   configuration through `features/public/repository.ts` and `service.ts`.
   Header/footer/hero/contact and the public program/service/feature sections are
@@ -580,21 +581,58 @@ Current public deployment:
 - The same final-validation pass confirmed from the installed Next.js 16.3.2
   documentation and implementation that successful Server Actions call
   `updateTag("public-website-config")` and revalidate all public routes,
-  sitemap, and robots. The exact authorized-admin Hero mutation, active/
-  inactive program, service-order, restoration, and unauthorized-authenticated
-  production tests were **not run** because no authorized browser session or
-  non-service-role account credentials were available. No service-role client
-  was used as a substitute. These tests must not be marked passed until
-  completed through `/admin/website-settings` with an authorized session.
+  sitemap, and robots. Subsequent authorized-admin E2E validation completed a
+  Hero CMS mutation and confirmed the public update before restoring the
+  approved value; disabled a program and confirmed its public disappearance
+  before re-enabling it; reordered a service and confirmed the public order
+  before restoring it. Cache invalidation/revalidation behaved correctly, no
+  Git commit or Netlify deployment was needed for these CMS-only mutations,
+  and the approved PRISM production values were restored afterward.
   Production also has a pre-existing
   migration-ledger drift: 0030's columns exist although 0030 is not recorded;
   replay was safely rejected as a duplicate-column operation and made no change.
 - Final local validation passed: lint reported zero errors and the same six
   pre-existing React Hook Form compiler warnings, TypeScript passed, all 57
   tests in 16 files passed, and the production build generated all 58 routes.
-- No Phase 6 Supabase Storage or media-upload work was introduced by the final
-  validation pass.
-- Deferred roadmap: Phase 6 — Supabase Storage/media management; Phase 7 —
+- Deferred roadmap: Phase 7 —
   advanced admin media/content experience; Phase 8 — SEO/performance/
   accessibility deep QA as needed; Phase 9 — security/regression/production
   hardening; future — multi-school architecture.
+
+### Phase 6 Supabase Storage / Media Management (completed locally 2026-08-23)
+
+- Additive migration `0033_phase6_storage_and_gallery.sql` defines exactly two
+  buckets with `ON CONFLICT DO NOTHING`: public `public-school-media` and private
+  `private-school-files`. It was intentionally not applied during this pass.
+- Generated paths are single-school and category-scoped: `branding/{logo|favicon|og}`,
+  `hero`, `programs/{id}`, `services/{id}`, `gallery`, and private
+  `{students|staff}/{id}/photos`. No tenant/school key or service-role client is used.
+- Storage RLS gives anonymous read-only access to intentional public media;
+  public mutations require `website_settings.manage`. Private mutations require
+  the matching student/staff edit permission, and reads require the corresponding
+  view permission or linked student/guardian/staff ownership.
+- `features/media` keeps raw Storage calls in its repository and applies signature,
+  MIME, size, category, UUID-path, and managed-cleanup rules in its service. JPEG,
+  PNG, WebP, and AVIF are supported; ICO is favicon-only. SVG and video are deferred.
+  Limits are 2 MB for branding, 8 MB for general public images, and 5 MB for
+  private photos. Private signed URLs expire after five minutes.
+- Replacement is upload → database persistence → best-effort old managed-object
+  cleanup. A failed database update removes the new upload. Public references are
+  stable public URLs; private `students.photo_url` / `staff.photo_url` values store
+  object paths, never signed or public URLs.
+- The admin website CMS now uploads logo, favicon, optional hero/OG, program,
+  service, and gallery images. Gallery items require title and meaningful alt text
+  and support caption/category/order/publish/hide/permanent confirmed delete.
+- `/gallery` renders active authentic uploads in a responsive `next/image` grid and
+  preserves the approved premium empty state when none exist. Optional hero,
+  program, and service media enhance the approved Phase 1–5 visuals without
+  removing their CSS/component fallbacks. Next Image permits only the configured
+  Supabase host and the two exact Storage URL path families.
+- Student and staff detail pages provide permission-scoped private photo upload,
+  replacement, and signed preview. Expense/library/document attachment workflows,
+  SVG, video, a generic media library, and automated orphan collection remain Phase 7.
+- Local validation: lint passed with the same six pre-existing React Hook Form
+  compiler warnings; `tsc --noEmit` passed; 64 tests in 18 files passed; and the
+  Next.js production build generated all 58 routes. Build-time Supabase reads were
+  blocked by the sandbox network and used the existing public fallbacks; the build
+  itself completed successfully. No migration, commit, push, or deployment occurred.

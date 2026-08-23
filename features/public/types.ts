@@ -6,6 +6,7 @@ export type PublicSchoolSettings = Pick<SchoolSettings,
   | "hero_eyebrow" | "hero_tagline" | "hero_title" | "hero_description"
   | "hero_primary_cta_label" | "hero_primary_cta_url"
   | "hero_secondary_cta_label" | "hero_secondary_cta_url"
+  | "hero_image_url"
   | "contact_email" | "contact_phone" | "website_url" | "address" | "address_line"
   | "city" | "district" | "state" | "country" | "postal_code" | "google_maps_url"
   | "facebook_url" | "instagram_url" | "youtube_url" | "linkedin_url"

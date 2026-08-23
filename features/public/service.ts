@@ -5,6 +5,7 @@ import {
   listActiveWebsiteFeatures,
   listActiveWebsitePrograms,
   listActiveWebsiteServices,
+  listActiveGalleryItems,
 } from "@/features/public/repository";
 import type { PublicSchoolSettings, PublicWebsiteConfig } from "@/features/public/types";
 
@@ -29,6 +30,7 @@ const FALLBACK_SETTINGS: PublicSchoolSettings = {
   hero_primary_cta_url: "/about",
   hero_secondary_cta_label: "Discover Future Learning",
   hero_secondary_cta_url: "/academics",
+  hero_image_url: null,
   contact_email: null,
   contact_phone: null,
   website_url: null,
@@ -53,6 +55,15 @@ function cleanSettings(settings: PublicSchoolSettings | null): PublicSchoolSetti
   if (!settings) return FALLBACK_SETTINGS;
   return { ...FALLBACK_SETTINGS, ...settings };
 }
+
+export const getPublicGalleryItems = unstable_cache(
+  async () => {
+    try { return await listActiveGalleryItems(createPublicClient()); }
+    catch (error) { console.error("Public gallery CMS read failed", error); return []; }
+  },
+  ["public-gallery-items"],
+  { tags: [PUBLIC_WEBSITE_CACHE_TAG], revalidate: 3600 },
+);
 
 async function loadPublicSchoolWebsiteConfig(): Promise<PublicWebsiteConfig> {
   const supabase = createPublicClient();

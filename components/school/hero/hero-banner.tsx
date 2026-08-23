@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { HeroVisual } from "@/components/school/hero/hero-visual";
 import type { PublicSchoolSettings } from "@/features/public/types";
+import Image from "next/image";
 
 export function HeroBanner({ settings }: { settings: PublicSchoolSettings }) {
   const title = settings.hero_title || "Where Learning Meets the Future";
@@ -62,7 +63,7 @@ export function HeroBanner({ settings }: { settings: PublicSchoolSettings }) {
         </div>
 
         <div className="2xl:scale-110">
-          <HeroVisual />
+          {settings.hero_image_url ? <div className="relative min-h-[22rem] overflow-hidden rounded-[2rem] border border-white/15 shadow-2xl sm:min-h-[28rem]"><Image src={settings.hero_image_url} alt="" fill sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover" preload /></div> : <HeroVisual />}
         </div>
       </div>
     </section>

@@ -38,10 +38,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MediaUpload } from "@/features/media/components/media-upload";
+import { GalleryManager } from "@/features/media/components/gallery-manager";
 
 type SettingsSection = "branding" | "hero" | "contact" | "social" | "seo";
 type CollectionSection = "programs" | "services" | "features";
-type Section = SettingsSection | CollectionSection;
+type Section = SettingsSection | CollectionSection | "gallery";
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "branding", label: "Branding" },
@@ -52,6 +54,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: "programs", label: "Academic Programs" },
   { key: "services", label: "Future Learning" },
   { key: "features", label: "Why PRISM" },
+  { key: "gallery", label: "Gallery" },
 ];
 
 const SETTINGS_FIELDS: Record<SettingsSection, (keyof SchoolSettingsUpdateInput)[]> = {
@@ -67,6 +70,7 @@ const FIELD_LABELS: Record<keyof SchoolSettingsUpdateInput, string> = {
   logo_url: "Logo URL or path", favicon_url: "Favicon URL or path", primary_color: "Primary color", secondary_color: "Secondary color", accent_color: "Accent color",
   hero_eyebrow: "Hero eyebrow", hero_tagline: "Hero tagline", hero_title: "Hero title", hero_description: "Hero description",
   hero_primary_cta_label: "Primary CTA label", hero_primary_cta_url: "Primary CTA link", hero_secondary_cta_label: "Secondary CTA label", hero_secondary_cta_url: "Secondary CTA link",
+  hero_image_url: "Optional hero image",
   contact_email: "Contact email", contact_phone: "Contact phone", website_url: "Website URL", address_line: "Address", city: "City", district: "District", state: "State", country: "Country", postal_code: "Postal code", google_maps_url: "Google Maps URL",
   facebook_url: "Facebook URL", instagram_url: "Instagram URL", youtube_url: "YouTube URL", linkedin_url: "LinkedIn URL",
   seo_title: "Default SEO title", seo_description: "Default SEO description", og_image_url: "Open Graph image URL or path",
@@ -105,7 +109,7 @@ function SettingsEditor({ settings, canManage, section }: { settings: SchoolSett
       <CardHeader>
         <div>
           <CardTitle>Website details</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">Media uploads are deferred to Phase 6. Enter a safe URL or public path for now.</p>
+          <p className="mt-1 text-sm text-slate-500">Text and media remain independently editable; uploaded files are saved to the scoped public-media bucket.</p>
         </div>
       </CardHeader>
       <CardContent>
@@ -131,6 +135,9 @@ function SettingsEditor({ settings, canManage, section }: { settings: SchoolSett
             {message && <p aria-live="polite" className={`text-sm ${message.startsWith("Saved") ? "text-emerald-700" : "text-red-600"}`}>{message}</p>}
           </div>
         </form>
+        {canManage && section === "branding" && <div className="mt-6 grid gap-4 md:grid-cols-2"><MediaUpload category="branding-logo" current={settings.logo_url} label="School logo" /><MediaUpload category="branding-favicon" current={settings.favicon_url} label="Favicon" /></div>}
+        {canManage && section === "hero" && <div className="mt-6"><MediaUpload category="hero" current={settings.hero_image_url} label="Optional hero image" /></div>}
+        {canManage && section === "seo" && <div className="mt-6"><MediaUpload category="og-image" current={settings.og_image_url} label="Open Graph image" /></div>}
       </CardContent>
     </Card>
   );
@@ -214,6 +221,8 @@ function CollectionManager({ kind, records, canManage }: { kind: CollectionSecti
             {error && <p aria-live="polite" className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-2"><Button type="submit" disabled={pending}>{pending ? "Saving…" : editing ? "Save changes" : "Add entry"}</Button>{editing && <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>}</div>
           </form>
+          {editing && kind === "programs" && <div className="mt-5"><MediaUpload category="program" entityId={editing.id} current={(editing as WebsiteProgram).image_url} label="Program image" /></div>}
+          {editing && kind === "services" && <div className="mt-5"><MediaUpload category="service" entityId={editing.id} current={(editing as WebsiteService).visual_asset_url} label="Service image" /></div>}
         </CardContent>
       </Card>}
     </div>
@@ -242,6 +251,7 @@ export function WebsiteSettingsManager({ config, canManage }: { config: WebsiteA
       {section === "programs" && <CollectionManager kind="programs" records={config.programs} canManage={canManage} />}
       {section === "services" && <CollectionManager kind="services" records={config.services} canManage={canManage} />}
       {section === "features" && <CollectionManager kind="features" records={config.features} canManage={canManage} />}
+      {section === "gallery" && <GalleryManager items={config.gallery} canManage={canManage} />}
     </div>
   );
 }

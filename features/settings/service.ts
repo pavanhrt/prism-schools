@@ -12,10 +12,10 @@ export function activeInDisplayOrder<T extends { is_active: boolean; display_ord
 }
 
 export async function getWebsiteAdminConfig(supabase: SupabaseClient): Promise<WebsiteAdminConfig> {
-  const [settings, programs, services, features] = await Promise.all([
-    repo.getSchoolSettings(supabase), repo.listWebsitePrograms(supabase), repo.listWebsiteServices(supabase), repo.listWebsiteFeatures(supabase),
+  const [settings, programs, services, features, gallery] = await Promise.all([
+    repo.getSchoolSettings(supabase), repo.listWebsitePrograms(supabase), repo.listWebsiteServices(supabase), repo.listWebsiteFeatures(supabase), repo.listWebsiteGalleryItems(supabase),
   ]);
-  return { settings, programs, services, features };
+  return { settings, programs, services, features, gallery };
 }
 
 export const updateSchoolSettings = (s: SupabaseClient, input: SchoolSettingsUpdateInput) => repo.updateSchoolSettings(s, nullifyBlankValues(input));
