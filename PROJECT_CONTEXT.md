@@ -31,7 +31,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   `1f510faa700b835716adbc5f77406ccaa1dda3dc`. It builds, type-checks, and
   passes its test suite. The currently deployed public website remains on
   Netlify from the `prismschool` branch at
-  `https://prismschools.netlify.app/`.
+  `https://prismschoolnew.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
   navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
   the server-rendered `Where Learning Meets the Future` experience, the
@@ -346,7 +346,7 @@ Current public deployment:
 
 - Platform: Netlify
 - Branch: `prismschool`
-- URL: `https://prismschools.netlify.app/`
+- URL: `https://prismschoolnew.netlify.app/`
 
 ### Phase 2 Home hero (completed 2026-08-23)
 
@@ -496,7 +496,7 @@ Current public deployment:
   services, Server Actions, and existing admissions/data behavior remain
   unchanged.
 - **Deployment workflow/state**: Netlify automatically deploys the production
-  site at `https://prismschools.netlify.app/` from pushes to `prismschool`.
+  site at `https://prismschoolnew.netlify.app/` from pushes to `prismschool`.
   Specialist work, when used, is integrated and reviewed first; the final tested
   commit is pushed to `origin/prismschool`, Netlify is allowed to publish that
   branch push, and cache-bypassed production routes are then verified. A separate
@@ -563,7 +563,7 @@ Current public deployment:
 - Default metadata, canonical/base URL, favicon, Open Graph/Twitter values, and
   `EducationalOrganization` structured data use configured factual fields only.
 - Deployment remains Netlify from branch `prismschool` at
-  `https://prismschools.netlify.app/`. Code changes require a branch push;
+  `https://prismschoolnew.netlify.app/`. Code changes require a branch push;
   subsequent CMS content changes flow through Supabase and revalidation.
 - **Phase 5 final-validation status (2026-08-23)**: production project
   `prismschool` was verified as the project referenced by `.env.local`, and
@@ -702,3 +702,11 @@ Current public deployment:
   the temporary Phase 6 gallery record/object still awaits explicit deletion
   confirmation. Phase 8 recommendations are limited to a dedicated SEO,
   Lighthouse, Core Web Vitals, WCAG, and bundle-optimization audit.
+- **Current production deployment validation (2026-08-23)**: the new Netlify
+  site `prismschoolnew` is ready from branch `prismschool` at commit
+  `e898de8f49ba9bf132901f51625e22049a620208`, deploy
+  `6a8ae2799dd71d8b4400c68f`. All tested public, admin, robots, and sitemap
+  routes returned HTTP 401 because site-level access protection is enabled;
+  public availability must not be claimed until that protection is disabled.
+  `school_settings.website_url` was checked through the anonymous/RLS path and
+  is `null`, so the CMS does not retain the old URL.

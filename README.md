@@ -158,7 +158,7 @@ pass:
 ## Deployment
 
 The PRISM public website is deployed on Netlify at
-`https://prismschools.netlify.app/`. Netlify automatically builds and publishes
+`https://prismschoolnew.netlify.app/`. Netlify automatically builds and publishes
 pushes to `origin/prismschool`; a separate manual deployment is not part of the
 release workflow. Supabase Cloud plus a self-hosted Next.js runtime behind
 Docker, Nginx, and HTTPS remains an optional future architecture — Docker/Nginx
