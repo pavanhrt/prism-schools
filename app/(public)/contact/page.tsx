@@ -1,12 +1,9 @@
-import type { Metadata } from "next";
+import { getPublicPageMetadata } from "@/features/public/metadata";
 import { formatPublicAddress, getPublicSchoolSettingsCached } from "@/features/public/service";
 import { ContactDetails } from "@/components/school/contact/contact-details";
 import { ContactHero } from "@/components/school/contact/contact-hero";
 
-export const metadata: Metadata = {
-  title: "Contact PRISM SCHOOLS",
-  description: "Contact PRISM SCHOOLS for admissions, school visits, and general enquiries.",
-};
+export const generateMetadata = () => getPublicPageMetadata("contact");
 
 export default async function ContactPage() {
   const settings = await getPublicSchoolSettingsCached();

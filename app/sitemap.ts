@@ -1,13 +1,13 @@
 import type { MetadataRoute } from "next";
+import { resolvePublicSiteUrl } from "@/features/public/metadata";
 import { getPublicSchoolSettingsCached } from "@/features/public/service";
 
-const PUBLIC_PATHS = ["", "/about", "/academics", "/gallery", "/admissions", "/contact"];
+const PUBLIC_PATHS = ["", "/about", "/academics", "/admissions", "/gallery", "/contact"];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const settings = await getPublicSchoolSettingsCached();
-  const base = (settings.website_url || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const base = resolvePublicSiteUrl(settings.website_url);
   return PUBLIC_PATHS.map((path) => ({
-    url: `${base}${path}`,
-    lastModified: new Date(),
+    url: new URL(path || "/", base).toString(),
   }));
 }

@@ -17,7 +17,7 @@ export function GalleryPlaceholder() {
               <span className="flex size-12 items-center justify-center rounded-2xl bg-prism-navy text-white">
                 <Camera aria-hidden="true" className="size-5" />
               </span>
-              <p className="mt-8 text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">A considered beginning</p>
+              <p className="mt-8 text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold-ink">A considered beginning</p>
               <h2 id="gallery-status-title" className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.035em] text-prism-navy sm:text-4xl lg:text-5xl">
                 The best school stories are real ones
               </h2>
@@ -41,7 +41,7 @@ export function GalleryPlaceholder() {
       <section aria-labelledby="future-gallery-title" className="bg-prism-bg py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
           <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">The collection ahead</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold-ink">The collection ahead</p>
             <h2 id="future-gallery-title" className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-prism-navy sm:text-4xl lg:text-5xl">
               Stories this space is designed to hold
             </h2>

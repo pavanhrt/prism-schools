@@ -11,7 +11,7 @@ export function AboutHero() {
       </div>
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 sm:py-24 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)] lg:py-32">
         <div className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">About PRISM SCHOOLS</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold-ink">About PRISM SCHOOLS</p>
           <h1 id="about-title" className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-prism-navy sm:text-5xl lg:text-6xl">A Modern Legacy of Learning</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">Strong academic foundations. Future-ready thinking. A learning environment designed to help students explore, create, build, solve, and lead.</p>
           <div className="mt-9 flex flex-wrap gap-3">

@@ -44,6 +44,7 @@ export function SiteHeader({ nav, schoolName, logoUrl }: SiteHeaderProps) {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
         <Link
           href="/"
+          aria-label={`${schoolName} home`}
           className="flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-navy focus-visible:ring-offset-2"
           onClick={() => setOpen(false)}
         >
@@ -93,7 +94,7 @@ export function SiteHeader({ nav, schoolName, logoUrl }: SiteHeaderProps) {
           aria-controls={open ? "mobile-nav" : undefined}
           aria-label={open ? "Close menu" : "Open menu"}
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-prism-navy transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-navy lg:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-prism-navy transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-prism-navy lg:hidden"
         >
           <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
           {open ? (

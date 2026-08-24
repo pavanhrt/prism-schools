@@ -15,7 +15,7 @@ export function LearningApproach() {
       <div aria-hidden="true" className="absolute -right-32 top-20 -z-10 h-96 w-96 rounded-full bg-prism-gold/[0.07] blur-3xl" />
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">Learning approach</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold-ink">Learning approach</p>
           <h2 id="learning-approach-title" className="mt-4 text-3xl font-semibold tracking-tight text-prism-navy sm:text-4xl">Beyond remembering. Toward understanding.</h2>
           <p className="mt-5 text-base leading-8 text-slate-600">Academic learning becomes lasting capability when students have opportunities to think, use, test, make, communicate and improve.</p>
         </div>

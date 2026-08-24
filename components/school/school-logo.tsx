@@ -12,15 +12,33 @@ interface SchoolLogoProps {
   schoolName?: string;
 }
 
+export function shouldBypassLogoOptimization(src: string): boolean {
+  if (!/^https?:\/\//i.test(src)) return false;
+
+  try {
+    const url = new URL(src);
+    const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+
+    return !(
+      url.protocol === "https:" &&
+      supabaseUrl.protocol === "https:" &&
+      url.host === supabaseUrl.host &&
+      url.pathname.startsWith("/storage/v1/object/public/public-school-media/")
+    );
+  } catch {
+    return true;
+  }
+}
+
 export function SchoolLogo({ size = 48, onDark = false, className, preload, src, schoolName = "PRISM SCHOOLS" }: SchoolLogoProps) {
   const image = (
     <Image
       src={src || "/branding/prism-logo.png"}
       alt={`${schoolName} logo`}
-      width={1254}
-      height={1254}
+      width={size}
+      height={size}
       preload={preload}
-      unoptimized={Boolean(src && /^https?:\/\//i.test(src))}
+      unoptimized={shouldBypassLogoOptimization(src || "/branding/prism-logo.png")}
       className={cn("h-full w-auto object-contain", !onDark && className)}
       style={{ height: size, width: "auto" }}
     />

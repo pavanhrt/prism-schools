@@ -24,7 +24,7 @@ export function AcademicStages({ programs }: { programs: PublicWebsiteProgram[] 
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">Academic model</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold-ink">Academic model</p>
             <h2 id="academic-structure-title" className="mt-4 text-3xl font-semibold tracking-tight text-prism-navy sm:text-4xl">Learning that grows with the learner.</h2>
           </div>
           <p className="max-w-2xl text-base leading-8 text-slate-600 lg:pt-7">Each stage has a distinct purpose: begin with wonder, strengthen essential foundations and progress toward deeper inquiry, independence and leadership. Together, these stages describe PRISM&apos;s approved high-level educational approach.</p>

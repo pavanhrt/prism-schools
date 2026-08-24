@@ -13,7 +13,7 @@ export function Philosophy() {
       <div className="mx-auto max-w-6xl px-5">
         <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">Our philosophy</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold-ink">Our philosophy</p>
             <h2 id="philosophy-title" className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-prism-navy sm:text-4xl lg:text-5xl">Built for learning that lasts</h2>
             <p className="mt-6 text-lg leading-8 text-slate-600">Education should prepare students not only for examinations, but for a world that continues to change.</p>
             <p className="mt-4 leading-7 text-slate-600">At PRISM, academic strength is the starting point. Curiosity, creativity, technology, practical learning, communication, confidence, and leadership help turn that foundation into capability.</p>

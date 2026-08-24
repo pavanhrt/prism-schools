@@ -19,7 +19,7 @@ export function SectionHeading({
 
   return (
     <div className={`max-w-3xl ${alignment}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">{eyebrow}</p>
+      <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${inverse ? "text-prism-gold" : "text-prism-gold-ink"}`}>{eyebrow}</p>
       <h2 id={titleId} className={`mt-4 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl lg:text-5xl ${inverse ? "text-white" : "text-prism-navy"}`}>
         {title}
       </h2>

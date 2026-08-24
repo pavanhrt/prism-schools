@@ -12,7 +12,7 @@ export function ContactDetails({ address, email, phone }: ContactDetailsProps) {
     <section className="bg-prism-bg py-20 sm:py-24 lg:py-28" aria-labelledby="contact-details-title">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">How to reach us</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold-ink">How to reach us</p>
           <h2 id="contact-details-title" className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-prism-navy sm:text-4xl">
             A conversation is the best place to begin
           </h2>

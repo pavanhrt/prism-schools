@@ -59,12 +59,12 @@ export function LearningStages({ programs }: { programs: PublicWebsiteProgram[] 
           {renderedStages.map((stage, index) => (
             <article key={stage.level} className="stage-row grid gap-7 py-9 sm:py-11 lg:grid-cols-[0.22fr_0.78fr_1.1fr] lg:gap-10 lg:py-12">
               <div className="flex items-start justify-between lg:block">
-                <span className="font-mono text-xs text-slate-400">{stage.number}</span>
+                <span className="font-mono text-xs text-slate-600">{stage.number}</span>
                 <span className="stage-row__line mt-4 hidden h-px w-16 bg-prism-gold lg:block" aria-hidden="true" />
               </div>
               <div>
                 {stage.image && <div className="relative mb-6 aspect-[16/9] overflow-hidden rounded-xl"><Image src={stage.image} alt={`${stage.level} at PRISM`} fill sizes="(max-width: 1024px) 100vw, 40vw" className="object-cover" /></div>}
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">{stage.level}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold-ink">{stage.level}</p>
                 <h3 className="mt-3 text-2xl font-semibold tracking-tight text-prism-navy sm:text-3xl">{stage.title}</h3>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600">{stage.description}</p>
                 {index === 1 && (

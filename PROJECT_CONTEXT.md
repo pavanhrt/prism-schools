@@ -22,16 +22,15 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 "fixes the legacy bug," it means a specific, identified defect in
 `School_V1.0`, not a hypothetical.
 
-## 2. Current state (as of 2026-08-23)
+## 2. Current state (as of 2026-08-24)
 
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
-  **Phase 7 (Advanced Admin Content & Media Experience)**. Phase 7 is
-  implementation-complete and deployed to production from commit
-  `1f510faa700b835716adbc5f77406ccaa1dda3dc`. It builds, type-checks, and
-  passes its test suite. The currently deployed public website remains on
-  Netlify from the `prismschool` branch at
-  `https://prismschoolnew.netlify.app/`.
+  **Phase 8 (SEO, Performance, Accessibility & Core Web Vitals)**. Phase 8 is
+  implementation-complete, locally validated, and awaiting its production
+  deployment/audit at the time of this entry. It builds, type-checks, and
+  passes its test suite. The public website deploys from the `prismschool`
+  branch to `https://prismschoolnew.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
   navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
   the server-rendered `Where Learning Meets the Future` experience, the
@@ -41,6 +40,11 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   methodology, technology, differentiator, and parent-message journey. Phase 4
   brought About, Academics, Admissions, Gallery, and Contact into the same
   premium, responsive PRISM design language without changing the approved Home.
+  Phases 5–7 added the public CMS, managed media, and focused admin content/media
+  workflows. Phase 8 adds exact per-route SEO metadata, factual structured data,
+  crawler files, image-boundary/performance improvements, WCAG contrast and
+  interaction corrections, responsive QA, security headers, and branded public
+  error states without changing public content or protected application behavior.
 - **Commit history**: starts with `Initial commit from Create Next App`,
   then one large commit (`School OS: full build, Phases 1-10`) that built
   the entire system in one session, then incremental commits (README,
@@ -51,7 +55,7 @@ of integrity rules the legacy system violated (see §5). Where this doc says
   comments in the SQL migrations.
 - **Scale**: 33 ordered Postgres migrations, 20 feature modules, 67 generated
   application routes, ~13,800+ lines of TypeScript/TSX across `app/` and
-  `features/`, 84 unit tests (20 test files) covering integrity-critical logic — not
+  `features/`, 105 unit tests (22 test files) covering integrity-critical logic — not
   UI, not CRUD happy-paths.
 - **Known gaps** — deliberately deferred, each needing its own scoped pass:
   - **PDF generation**: report cards, admit cards, payslips, ID cards,
@@ -700,8 +704,8 @@ Current public deployment:
   unauthenticated admin redirects; an authenticated browser rerun was prevented
   because the browser-control sandbox failed to attach to the signed-in tab; and
   the temporary Phase 6 gallery record/object still awaits explicit deletion
-  confirmation. Phase 8 recommendations are limited to a dedicated SEO,
-  Lighthouse, Core Web Vitals, WCAG, and bundle-optimization audit.
+  confirmation. Phase 8 was subsequently completed as the bounded SEO,
+  performance, accessibility, responsive, and security audit recorded below.
 - **Current production deployment validation (2026-08-23)**: the Netlify site
   `prismschoolnew` is public and ready from branch `prismschool` at commit
   `41fd22f3e056a5bcabb9e755ffa54ec771fd2485`, deploy
@@ -711,3 +715,64 @@ Current public deployment:
   `/auth/login`. Site-level access protection was disabled.
   `school_settings.website_url` remains `null` and does not retain the old
   hostname.
+
+### Phase 8 SEO, Performance, Accessibility & Core Web Vitals (implementation complete; production audit pending)
+
+- The six approved public routes now publish exact route-specific titles,
+  descriptions, canonical URLs, Open Graph metadata, and Twitter metadata
+  through a single typed metadata registry. Production URL resolution accepts
+  only HTTP(S), rejects credentials, excludes localhost outside development, and
+  falls back to https://prismschoolnew.netlify.app/.
+- The public layout emits factual School JSON-LD built only from approved public
+  settings. JSON is serialized with less-than characters escaped before
+  insertion. No student, staff, authenticated, test-class, or fabricated school
+  data is exposed.
+- sitemap.xml contains exactly the six public marketing routes and robots.txt
+  allows public crawling while disallowing /admin, /portal, /api, and /auth.
+  Dynamic CMS favicon support now takes precedence by moving the bundled fallback
+  favicon into public/.
+- Public image handling reserves stable logo dimensions and uses Next image
+  optimization only for the bundled asset or the exact configured public
+  Supabase bucket. Signed/private and unrelated remote URLs are never added to
+  the optimizer allowlist. No image-quality degradation or dependency change was
+  introduced.
+- Accessibility corrections add a WCAG-safe gold-on-light ink token, improve
+  low-contrast public text, preserve visible focus, make the mobile menu trigger
+  at least 44 by 44 CSS pixels, add a focusable main landmark/skip target, and
+  retain keyboard Escape close with focus restoration. Branded public 404 and
+  error states avoid raw internal-error disclosure.
+- Responsive browser QA passed all six public routes at 320, 375, 768, 1024, and
+  1440 CSS-pixel widths: one H1, one main landmark, header/footer present, correct
+  titles, and no horizontal overflow in all 30 route/viewport cases. The mobile
+  menu opened, closed with Escape, and restored trigger focus. The branded 404
+  exposed valid Home and Admissions links.
+- Baseline production Home Lighthouse before deployment: desktop 98 Performance /
+  96 Accessibility / 100 Best Practices / 92 SEO, LCP 0.8 s, CLS 0.004, TBT 0 ms.
+  Three mobile runs had a median 98 / 96 / 100 / 92, LCP 2.4 s, CLS 0.008, and
+  TBT 50 ms. PageSpeed Insights was rate-limited (HTTP 429), so no PSI result is
+  claimed.
+- Corrected local production-build Lighthouse: desktop 100 / 100 / 100 / 100 with
+  LCP 0.6 s, CLS 0, TBT 0 ms; mobile 96 / 100 / 100 / 100 with LCP 2.8 s, CLS 0,
+  TBT 30 ms. Final production Lighthouse and crawler evidence will be added only
+  after Netlify deploys the implementation commit.
+- Next's experimental bundle analyzer was run successfully. The public client
+  graph remained limited to shared framework, header, Image, and Lucide code; no
+  heavy public-only package or duplicate dependency justified a package change.
+  package.json and the lockfile are unchanged.
+- Security response headers now remove the powered-by disclosure and add nosniff,
+  frame denial, strict-origin referrer policy, and a restrictive permissions
+  policy. A complete Codex Security diff scan reviewed all 39 authoritative Phase
+  8 inventory items and sealed with zero findings; unchanged RLS/Auth/admin/portal/
+  database behavior remained explicitly outside the diff.
+- Final local validation passed: `npm run lint` completed with zero errors and six
+  pre-existing React Hook Form compiler warnings; `npx tsc --noEmit` passed;
+  `npm run test` passed all 105 tests in 22 files; and `npm run build` passed,
+  generating 66 static pages and the existing protected/dynamic routes.
+- No Supabase schema, migration, RLS, Auth, RBAC, admin, portal,
+  admissions-backend, or public-content change occurred. Dependencies are
+  unchanged. The temporary Phase 6 Gallery validation record/object remains
+  untouched and still requires explicit deletion confirmation; full
+  temporary-media cleanup must not be claimed.
+- Deployment commit, Netlify deploy ID, final production HTTP/crawler/security-
+  header checks, and final production Lighthouse results are pending and will be
+  recorded after the prismschool push.

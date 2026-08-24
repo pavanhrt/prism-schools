@@ -8,6 +8,7 @@
   --color-prism-navy: #071a3d;
   --color-prism-navy-light: #0b2a5b;
   --color-prism-gold: #c9a227;
+  --color-prism-gold-ink: #8a6a00;
   --color-prism-bg: #f7f9fc;
 }
 
@@ -17,6 +18,7 @@
   --color-prism-navy: var(--color-prism-navy);
   --color-prism-navy-light: var(--color-prism-navy-light);
   --color-prism-gold: var(--color-prism-gold);
+  --color-prism-gold-ink: var(--color-prism-gold-ink);
   --color-prism-bg: var(--color-prism-bg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

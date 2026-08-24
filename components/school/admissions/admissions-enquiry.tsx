@@ -12,7 +12,7 @@ export function AdmissionsEnquiry() {
     <section id="enquiry" aria-labelledby="enquiry-title" className="scroll-mt-24 bg-prism-bg py-20 sm:py-24">
       <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:px-12">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold">Start here</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-prism-gold-ink">Start here</p>
           <h2 id="enquiry-title" className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-prism-navy sm:text-4xl lg:text-5xl">
             Let&apos;s begin the conversation
           </h2>

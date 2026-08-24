@@ -1,15 +1,12 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { AcademicHero } from "@/components/school/academics/academic-hero";
 import { AcademicStages } from "@/components/school/academics/academic-stages";
 import { LearningApproach } from "@/components/school/academics/learning-approach";
+import { getPublicPageMetadata } from "@/features/public/metadata";
 import { getPublicSchoolWebsiteConfig } from "@/features/public/service";
 
-export const metadata: Metadata = {
-  title: "Academics",
-  description: "Explore the PRISM academic approach: strong foundations, purposeful learning and future-ready capabilities.",
-};
+export const generateMetadata = () => getPublicPageMetadata("academics");
 
 export default async function AcademicsPage() {
   const { programs } = await getPublicSchoolWebsiteConfig();

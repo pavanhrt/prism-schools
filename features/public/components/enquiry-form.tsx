@@ -56,25 +56,25 @@ export function EnquiryForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold">Admissions enquiry</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-prism-gold-ink">Admissions enquiry</p>
         <h3 className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-prism-navy">Tell us a little about your child</h3>
         <p className="mt-2 text-sm leading-6 text-slate-500">Fields marked with <span aria-hidden="true">*</span><span className="sr-only">an asterisk</span> are required.</p>
       </div>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="student_name">Student name <span aria-hidden="true" className="text-prism-gold">*</span></Label>
+          <Label htmlFor="student_name">Student name <span aria-hidden="true" className="text-prism-gold-ink">*</span></Label>
           <Input id="student_name" autoComplete="name" placeholder="Child's full name" className="h-11 border-slate-300 focus-visible:ring-prism-navy" aria-required="true" aria-invalid={Boolean(errors.student_name)} aria-describedby={errors.student_name ? "student_name-error" : undefined} {...register("student_name")} />
           {errors.student_name && <p id="student_name-error" role="alert" className="text-xs font-medium text-red-700">{errors.student_name.message}</p>}
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="parent_name">Parent / guardian name <span aria-hidden="true" className="text-prism-gold">*</span></Label>
+          <Label htmlFor="parent_name">Parent / guardian name <span aria-hidden="true" className="text-prism-gold-ink">*</span></Label>
           <Input id="parent_name" autoComplete="name" placeholder="Your full name" className="h-11 border-slate-300 focus-visible:ring-prism-navy" aria-required="true" aria-invalid={Boolean(errors.parent_name)} aria-describedby={errors.parent_name ? "parent_name-error" : undefined} {...register("parent_name")} />
           {errors.parent_name && <p id="parent_name-error" role="alert" className="text-xs font-medium text-red-700">{errors.parent_name.message}</p>}
         </div>
       </div>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="phone">Phone <span aria-hidden="true" className="text-prism-gold">*</span></Label>
+          <Label htmlFor="phone">Phone <span aria-hidden="true" className="text-prism-gold-ink">*</span></Label>
           <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="Your contact number" className="h-11 border-slate-300 focus-visible:ring-prism-navy" aria-required="true" aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? "phone-error" : undefined} {...register("phone")} />
           {errors.phone && <p id="phone-error" role="alert" className="text-xs font-medium text-red-700">{errors.phone.message}</p>}
         </div>
