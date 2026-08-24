@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 
 const NAV: { href: string; label: string; permission: string | null }[] = [
   { href: "/admin/dashboard", label: "Dashboard", permission: null },
+  { href: "/admin/management-intelligence", label: "Management Intelligence", permission: "management_intelligence.view" },
   { href: "/admin/admissions/inquiries", label: "Inquiries", permission: "admissions.view" },
   { href: "/admin/admissions/applications", label: "Applications", permission: "admissions.view" },
   { href: "/admin/students", label: "Students", permission: "students.view" },
