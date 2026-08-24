@@ -27,10 +27,11 @@ of integrity rules the legacy system violated (see §5). Where this doc says
 - **Status**: Feature-complete for Phases 1–10 of the School OS blueprint
   (see §5). The PRISM public website transformation is complete through
   **Phase 8 (SEO, Performance, Accessibility & Core Web Vitals)**. Phase 8 is
-  implementation-complete, locally validated, and awaiting its production
-  deployment/audit at the time of this entry. It builds, type-checks, and
-  passes its test suite. The public website deploys from the `prismschool`
-  branch to `https://prismschoolnew.netlify.app/`.
+  implementation-complete, locally validated, deployed, and production-audited.
+  Its implementation commit is `d2aeac55c226667246b927043e41c78dc7a3fb8f`,
+  published as Netlify deploy `6a8c2d388ba41e0008079993`. It builds,
+  type-checks, and passes its test suite. The public website deploys from the
+  `prismschool` branch to `https://prismschoolnew.netlify.app/`.
 - **Current public website**: Phase 1 established the shared PRISM SCHOOLS
   navy/gold/white brand foundation. Phase 2 replaced only the Home hero with
   the server-rendered `Where Learning Meets the Future` experience, the
@@ -716,7 +717,7 @@ Current public deployment:
   `school_settings.website_url` remains `null` and does not retain the old
   hostname.
 
-### Phase 8 SEO, Performance, Accessibility & Core Web Vitals (implementation complete; production audit pending)
+### Phase 8 SEO, Performance, Accessibility & Core Web Vitals (complete; deployed)
 
 - The six approved public routes now publish exact route-specific titles,
   descriptions, canonical URLs, Open Graph metadata, and Twitter metadata
@@ -753,8 +754,12 @@ Current public deployment:
   claimed.
 - Corrected local production-build Lighthouse: desktop 100 / 100 / 100 / 100 with
   LCP 0.6 s, CLS 0, TBT 0 ms; mobile 96 / 100 / 100 / 100 with LCP 2.8 s, CLS 0,
-  TBT 30 ms. Final production Lighthouse and crawler evidence will be added only
-  after Netlify deploys the implementation commit.
+  TBT 30 ms. The deployed Home then scored 100 / 100 / 100 / 100 on desktop with
+  LCP 0.571 s, CLS 0.001, and TBT 13 ms. Three production mobile runs had a median
+  95 / 100 / 100 / 100, FCP 1.082 s, LCP 2.439 s, CLS 0, and TBT 92 ms. Relative
+  to the mobile baseline, Accessibility improved from 96 to 100 and SEO from 92
+  to 100 while LCP remained effectively stable; no major performance regression
+  was found.
 - Next's experimental bundle analyzer was run successfully. The public client
   graph remained limited to shared framework, header, Image, and Lucide code; no
   heavy public-only package or duplicate dependency justified a package change.
@@ -773,6 +778,16 @@ Current public deployment:
   unchanged. The temporary Phase 6 Gallery validation record/object remains
   untouched and still requires explicit deletion confirmation; full
   temporary-media cleanup must not be claimed.
-- Deployment commit, Netlify deploy ID, final production HTTP/crawler/security-
-  header checks, and final production Lighthouse results are pending and will be
-  recorded after the prismschool push.
+- Implementation commit `d2aeac55c226667246b927043e41c78dc7a3fb8f` was pushed
+  once to `origin/prismschool` and Netlify published ready production deploy
+  `6a8c2d388ba41e0008079993` for that exact commit.
+- Production Googlebot/HTTP validation passed for all six routes: HTTP 200, exact
+  titles/descriptions/canonicals/Open Graph URLs, one H1, one main landmark, and
+  factual JSON-LD. `sitemap.xml` and `robots.txt` returned 200 with the exact
+  approved public/protected route contract; response headers removed
+  `X-Powered-By` and delivered `nosniff`, `DENY` framing,
+  `strict-origin-when-cross-origin`, and the restrictive permissions policy. The
+  30 responsive route/viewport cases passed after three transient navigation
+  states passed on immediate read-only retry; the mobile menu remained 44 by 44,
+  Escape restored focus, the branded unknown path returned 404, `favicon.ico`
+  returned 200, and admin/portal checks retained 307 login redirects.
