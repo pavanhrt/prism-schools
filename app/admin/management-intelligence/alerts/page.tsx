@@ -1,11 +1,13 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions";
 import { AlertActions } from "@/features/management-intelligence/components/alert-actions";
-import { listAlerts, listClassesAndSections } from "@/features/management-intelligence/service";
+import { alertDestination, listAlerts, listClassesAndSections } from "@/features/management-intelligence/service";
+import { cn } from "@/lib/utils";
 
 type Params = { severity?: string; category?: string; status?: string; class_id?: string; from?: string; to?: string; page?: string };
 
@@ -25,6 +27,9 @@ export default async function AlertCenterPage({ searchParams }: { searchParams: 
     listClassesAndSections(supabase),
     hasPermission("management_intelligence.manage_alerts"),
   ]);
+  const pageCount = Math.max(Math.ceil(result.count / result.pageSize), 1);
+  const queryBase = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])));
+  const pageHref = (page: number) => `?${new URLSearchParams([...queryBase.entries()].filter(([key]) => key !== "page").concat([["page", String(page)]])).toString()}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,7 +45,7 @@ export default async function AlertCenterPage({ searchParams }: { searchParams: 
       </form></CardContent></Card>
       <Table><THead><TR><TH>Alert</TH><TH>Rule explanation</TH><TH>Severity</TH><TH>Status</TH><TH>Detected</TH><TH>Action</TH></TR></THead><TBody>
         {result.rows.map((alert) => <TR key={alert.id}>
-          <TD><p className="font-medium text-slate-900">{alert.title}</p><p className="text-xs text-slate-400">{alert.category} · {alert.alert_type}</p></TD>
+          <TD><Link href={alertDestination(alert)} className="font-medium text-slate-900 hover:underline">{alert.title}</Link><p className="text-xs text-slate-400">{alert.category} · {alert.alert_type}</p></TD>
           <TD className="max-w-lg"><p className="text-xs leading-5 text-slate-600">{alert.message}</p><p className="mt-1 text-xs text-slate-400">Rule: {alert.rule_key} · Current: {alert.current_value ?? "n/a"} · Threshold: {alert.threshold_value ?? "n/a"} · Period: {alert.period_start ?? "n/a"} to {alert.period_end ?? "n/a"}</p></TD>
           <TD><Badge className={alert.severity === "CRITICAL" ? "bg-red-100 text-red-700" : alert.severity === "WARNING" ? "bg-amber-100 text-amber-700" : ""}>{alert.severity}</Badge></TD>
           <TD>{alert.status}</TD><TD className="text-xs">First {alert.first_detected_at.slice(0, 10)}<br />Last {alert.last_detected_at.slice(0, 10)}</TD>
@@ -48,7 +53,7 @@ export default async function AlertCenterPage({ searchParams }: { searchParams: 
         </TR>)}
         {!result.rows.length && <TR><TD colSpan={6} className="py-8 text-center text-slate-500">No alerts match these filters. If attendance has not been recorded, this is not evidence that conditions are healthy.</TD></TR>}
       </TBody></Table>
-      <p className="text-sm text-slate-500">{result.count} alerts · page {result.page}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500"><span>Page {result.page} of {pageCount} · Total Alerts {result.count}</span><div className="flex gap-2">{result.page > 1 && <Link href={pageHref(result.page - 1)} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Previous</Link>}{result.page < pageCount && <Link href={pageHref(result.page + 1)} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Next</Link>}</div></div>
     </div>
   );
 }

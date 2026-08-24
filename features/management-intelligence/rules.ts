@@ -64,11 +64,39 @@ export function consecutiveAbsenceDays(
 ): number {
   const statuses = new Map(records.map((record) => [record.attendance_date, record.status]));
   let streak = 0;
+  let foundEvaluatedDay = false;
   for (let index = workingDays.length - 1; index >= 0; index -= 1) {
-    if (statuses.get(workingDays[index]) !== "absent") break;
+    const status = statuses.get(workingDays[index]);
+    if (!foundEvaluatedDay && status === undefined) continue;
+    foundEvaluatedDay = true;
+    if (status !== "absent") break;
     streak += 1;
   }
   return streak;
+}
+
+export function newestWorkingDayEvaluation(
+  records: { attendance_date: string; status: string }[],
+  workingDays: string[],
+): "ABSENT" | "NON_ABSENT" | "NOT_EVALUATED" {
+  const newestWorkingDay = workingDays.at(-1);
+  if (!newestWorkingDay) return "NOT_EVALUATED";
+  const status = records.find((record) => record.attendance_date === newestWorkingDay)?.status;
+  if (status === undefined) return "NOT_EVALUATED";
+  return status === "absent" ? "ABSENT" : "NON_ABSENT";
+}
+
+export function latestRecordedAttendanceEvaluation(
+  records: { attendance_date: string; status: string }[],
+  workingDays: string[],
+): "ABSENT" | "NON_ABSENT" | "NOT_EVALUATED" {
+  const statuses = new Map(records.map((record) => [record.attendance_date, record.status]));
+  for (let index = workingDays.length - 1; index >= 0; index -= 1) {
+    const status = statuses.get(workingDays[index]);
+    if (status === undefined) continue;
+    return status === "absent" ? "ABSENT" : "NON_ABSENT";
+  }
+  return "NOT_EVALUATED";
 }
 
 export function studentAbsenceSeverity(
@@ -128,4 +156,13 @@ export function alertRefreshDecision(priorStatus: string | null): "CREATE" | "UP
 
 export function shouldAutoResolveAlert(isActive: boolean, conditionStillPresent: boolean) {
   return isActive && !conditionStillPresent;
+}
+
+export function isAlertTransitionAllowed(
+  currentStatus: string,
+  nextStatus: "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED",
+): boolean {
+  if (currentStatus === "OPEN") return true;
+  if (currentStatus === "ACKNOWLEDGED") return nextStatus === "RESOLVED" || nextStatus === "DISMISSED";
+  return false;
 }

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions";
 import { MetricCard } from "@/features/management-intelligence/components/metric-card";
 import { RefreshAlertsButton } from "@/features/management-intelligence/components/refresh-alerts-button";
-import { getManagementOverview, listAlerts } from "@/features/management-intelligence/service";
+import { alertDestination, getManagementOverview, listAlerts } from "@/features/management-intelligence/service";
 
 function displayMetric(metric: { value: number | null; dataAvailable: boolean }, suffix = "") {
   return metric.dataAvailable && metric.value !== null ? `${metric.value}${suffix}` : "Not recorded";
@@ -14,7 +14,7 @@ export default async function ManagementIntelligencePage() {
   const supabase = await createClient();
   const [overview, alerts, canManageAlerts] = await Promise.all([
     getManagementOverview(supabase),
-    listAlerts(supabase, { status: "OPEN", pageSize: 12 }),
+    listAlerts(supabase, { statuses: ["OPEN", "ACKNOWLEDGED"], pageSize: 12 }),
     hasPermission("management_intelligence.manage_alerts"),
   ]);
   const severityGroups = ["CRITICAL", "WARNING", "INFO"] as const;
@@ -46,9 +46,9 @@ export default async function ManagementIntelligencePage() {
         <h2 className="text-lg font-semibold text-slate-900">Student Attendance</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard label="Active Students" value={overview.students.active} />
-          <MetricCard label="Present Today" value={displayMetric(overview.students.presentToday)} />
+          <MetricCard label="Present Today" value={displayMetric(overview.students.presentToday)} note="Headcount: present, late, or half-day" />
           <MetricCard label="Absent Today" value={displayMetric(overview.students.absentToday)} />
-          <MetricCard label="Today's Attendance" value={displayMetric(overview.students.attendanceTodayPercentage, "%")} />
+          <MetricCard label="Today's Attendance" value={displayMetric(overview.students.attendanceTodayPercentage, "%")} note="Weighted: half-day counts as 0.5" />
           <MetricCard label="Absent 3+ Days" value={overview.students.absentWarning} />
           <MetricCard label="Absent 5+ Days" value={overview.students.absentCritical} />
           <MetricCard label="Below 75%" value={overview.students.belowWarning} />
@@ -81,9 +81,9 @@ export default async function ManagementIntelligencePage() {
                 {rows.length ? (
                   <div className="flex flex-col gap-2">
                     {rows.map((alert) => (
-                      <Link key={alert.id} href={`/admin/management-intelligence/attendance?severity=${alert.severity}`} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50">
+                      <Link key={alert.id} href={alertDestination(alert)} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50">
                         <div><p className="text-sm font-medium text-slate-900">{alert.title}</p><p className="line-clamp-2 text-xs text-slate-500">{alert.message}</p></div>
-                        <Badge className={severity === "CRITICAL" ? "bg-red-100 text-red-700" : severity === "WARNING" ? "bg-amber-100 text-amber-700" : ""}>{severity}</Badge>
+                        <div className="flex flex-col items-end gap-1"><Badge className={severity === "CRITICAL" ? "bg-red-100 text-red-700" : severity === "WARNING" ? "bg-amber-100 text-amber-700" : ""}>{severity}</Badge><span className="text-[10px] text-slate-400">{alert.status}</span></div>
                       </Link>
                     ))}
                   </div>

@@ -97,6 +97,7 @@ export interface StudentInsight {
   previousPercentage: number | null;
   differencePoints: number | null;
   consecutiveAbsenceDays: number;
+  latestRecordedAttendanceEvaluation: "ABSENT" | "NON_ABSENT" | "NOT_EVALUATED";
   trend: TrendStatus;
   severity: AlertSeverity | null;
 }
@@ -109,6 +110,7 @@ export interface StaffInsight {
   recordedWorkingDays: number;
   attendancePercentage: number | null;
   consecutiveAbsenceDays: number;
+  latestRecordedAttendanceEvaluation: "ABSENT" | "NON_ABSENT" | "NOT_EVALUATED";
   severity: AlertSeverity | null;
 }
 

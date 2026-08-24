@@ -66,6 +66,24 @@ const calendarOverrideSchema = z.object({
   label: z.string().trim().min(2).max(120),
 });
 
+const weeklyOffDaySchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  enabled: z.boolean(),
+});
+
+export async function setWeeklyOffDayAction(input: z.input<typeof weeklyOffDaySchema>): Promise<ActionResult> {
+  try {
+    await requirePermission("management_intelligence.manage_settings");
+    const parsed = weeklyOffDaySchema.parse(input);
+    const supabase = await createClient();
+    await repo.setWeeklyOffDay(supabase, parsed.dayOfWeek, parsed.enabled);
+    revalidatePath("/admin/management-intelligence", "layout");
+    return { ok: true, message: "Weekly off-day updated." };
+  } catch (error) {
+    return failure(error, "Could not update the weekly off-day.");
+  }
+}
+
 export async function upsertCalendarOverrideAction(input: z.input<typeof calendarOverrideSchema>): Promise<ActionResult> {
   try {
     await requirePermission("management_intelligence.manage_settings");

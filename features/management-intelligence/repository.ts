@@ -60,6 +60,7 @@ export async function listCurrentRoster(
   academicYearId: string,
   classId?: string,
   sectionId?: string,
+  studentId?: string,
 ): Promise<RosterRow[]> {
   let query = supabase
     .from("student_enrollments")
@@ -68,6 +69,7 @@ export async function listCurrentRoster(
     .eq("students.status", "active");
   if (classId) query = query.eq("class_id", classId);
   if (sectionId) query = query.eq("section_id", sectionId);
+  if (studentId) query = query.eq("student_id", studentId);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as unknown as RosterRow[];
@@ -80,6 +82,7 @@ export async function listStudentAttendance(
   end: string,
   classId?: string,
   sectionId?: string,
+  studentId?: string,
 ): Promise<StudentAttendanceInput[]> {
   let query = supabase
     .from("student_attendance")
@@ -90,6 +93,7 @@ export async function listStudentAttendance(
     .order("attendance_date");
   if (classId) query = query.eq("class_id", classId);
   if (sectionId) query = query.eq("section_id", sectionId);
+  if (studentId) query = query.eq("student_id", studentId);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as StudentAttendanceInput[];
@@ -163,6 +167,20 @@ export async function upsertCalendarOverride(
   if (error) throw error;
 }
 
+export async function listWeeklyOffDays(supabase: SupabaseClient): Promise<number[]> {
+  const { data, error } = await supabase.from("school_weekly_off_days").select("day_of_week").order("day_of_week");
+  if (error) throw error;
+  return (data ?? []).map((row) => Number(row.day_of_week));
+}
+
+export async function setWeeklyOffDay(supabase: SupabaseClient, dayOfWeek: number, enabled: boolean): Promise<void> {
+  const query = enabled
+    ? supabase.from("school_weekly_off_days").upsert({ day_of_week: dayOfWeek }, { onConflict: "day_of_week" })
+    : supabase.from("school_weekly_off_days").delete().eq("day_of_week", dayOfWeek);
+  const { error } = await query;
+  if (error) throw error;
+}
+
 export async function listCalendarConfiguration(
   supabase: SupabaseClient,
   academicYearId: string,
@@ -190,6 +208,7 @@ export interface AlertFilters {
   severity?: string;
   category?: string;
   status?: string;
+  statuses?: string[];
   classId?: string;
   from?: string;
   to?: string;
@@ -207,12 +226,42 @@ export async function listAlerts(supabase: SupabaseClient, filters: AlertFilters
   if (filters.severity) query = query.eq("severity", filters.severity);
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.status) query = query.eq("status", filters.status);
+  if (!filters.status && filters.statuses?.length) query = query.in("status", filters.statuses);
   if (filters.classId) query = query.eq("class_id", filters.classId);
   if (filters.from) query = query.gte("last_detected_at", `${filters.from}T00:00:00.000Z`);
   if (filters.to) query = query.lte("last_detected_at", `${filters.to}T23:59:59.999Z`);
   const { data, error, count } = await query.range((page - 1) * pageSize, page * pageSize - 1);
   if (error) throw error;
   return { rows: (data ?? []) as ManagementAlert[], count: count ?? 0, page, pageSize };
+}
+
+export async function getAlertSummary(supabase: SupabaseClient, periodStart: string, periodEnd: string) {
+  const [critical, warning, resolved] = await Promise.all([
+    supabase
+      .from("management_alerts")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["OPEN", "ACKNOWLEDGED"])
+      .eq("severity", "CRITICAL"),
+    supabase
+      .from("management_alerts")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["OPEN", "ACKNOWLEDGED"])
+      .eq("severity", "WARNING"),
+    supabase
+      .from("management_alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "RESOLVED")
+      .gte("resolved_at", `${periodStart}T00:00:00.000Z`)
+      .lte("resolved_at", `${periodEnd}T23:59:59.999Z`),
+  ]);
+  for (const result of [critical, warning, resolved]) {
+    if (result.error) throw result.error;
+  }
+  return {
+    openCritical: critical.count ?? 0,
+    openWarnings: warning.count ?? 0,
+    resolvedThisPeriod: resolved.count ?? 0,
+  };
 }
 
 export async function getAlert(supabase: SupabaseClient, id: string): Promise<ManagementAlert | null> {

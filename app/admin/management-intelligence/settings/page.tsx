@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions";
 import { SettingEditor } from "@/features/management-intelligence/components/settings-form";
 import { CalendarOverrideForm } from "@/features/management-intelligence/components/calendar-override-form";
-import { listSettings, listAcademicYears } from "@/features/management-intelligence/service";
+import { WeeklyOffDaysForm } from "@/features/management-intelligence/components/weekly-off-days-form";
+import { listSettings, listAcademicYears, listWeeklyOffDays } from "@/features/management-intelligence/service";
 
 const EDITABLE = [
   ["student_absence_warning_days", "Student absence warning", "Consecutive configured working days"],
@@ -18,7 +19,7 @@ const EDITABLE = [
 export default async function IntelligenceSettingsPage() {
   if (!(await hasPermission("management_intelligence.manage_settings"))) redirect("/admin/management-intelligence");
   const supabase = await createClient();
-  const [settings, academicYears] = await Promise.all([listSettings(supabase), listAcademicYears(supabase)]);
+  const [settings, academicYears, weeklyOffDays] = await Promise.all([listSettings(supabase), listAcademicYears(supabase), listWeeklyOffDays(supabase)]);
   const currentYear = academicYears.find((row) => row.is_current);
   const byKey = new Map(settings.map((row) => [row.setting_key, row]));
   return (
@@ -28,7 +29,8 @@ export default async function IntelligenceSettingsPage() {
         {EDITABLE.map(([key, label, suffix]) => <SettingEditor key={key} settingKey={key} label={label} value={Number(byKey.get(key)?.numeric_value ?? 0)} suffix={suffix} />)}
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Working-day handling</CardTitle></CardHeader><CardContent className="text-sm leading-6 text-slate-600">
-        Sunday is seeded as the recurring weekly off-day. Date-specific rows in <code className="rounded bg-slate-100 px-1">academic_calendar_days</code> override weekly rules for holidays, closures, or exceptional working days. Missing attendance on a working day is never converted into an absence.
+        Choose recurring weekly off-days below. Sunday is editable like every other day. Date-specific rows in <code className="rounded bg-slate-100 px-1">academic_calendar_days</code> override weekly rules for holidays, closures, or exceptional working days. Missing attendance on a working day is never converted into an absence.
+        <div className="mt-4 border-t border-slate-100 pt-4"><WeeklyOffDaysForm initialDays={weeklyOffDays} /></div>
         {currentYear ? <div className="mt-4 border-t border-slate-100 pt-4"><CalendarOverrideForm academicYearId={currentYear.id} /></div> : <p className="mt-3 text-amber-700">Set a current academic year before configuring calendar overrides.</p>}
       </CardContent></Card>
     </div>

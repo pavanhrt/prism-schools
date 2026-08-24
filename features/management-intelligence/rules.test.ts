@@ -32,7 +32,7 @@ describe("consecutive student absence", () => {
     const values = workingDays.map((attendance_date, index) => ({ attendance_date, status: index === 4 ? "present" : "absent" }));
     expect(consecutiveAbsenceDays(values, workingDays)).toBe(0);
   });
-  it("does not treat a missing record as absent", () => expect(consecutiveAbsenceDays(records(2), [...workingDays, "2026-08-27"])).toBe(0));
+  it("preserves the last evaluated streak without counting a missing record as absent", () => expect(consecutiveAbsenceDays(records(2), [...workingDays, "2026-08-27"])).toBe(2));
 });
 describe("attendance percentage", () => {
   const days = ["2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27"];

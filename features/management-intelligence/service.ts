@@ -8,6 +8,8 @@ import {
   consecutiveAbsenceDays,
   lowAttendanceSeverity,
   isDateCoveredByApprovedLeave,
+  isAlertTransitionAllowed,
+  latestRecordedAttendanceEvaluation,
   previousComparablePeriod,
   studentAbsenceSeverity,
 } from "./rules";
@@ -34,6 +36,8 @@ export interface AnalyticsFilters {
   end?: string;
   classId?: string;
   sectionId?: string;
+  studentId?: string;
+  includeStaff?: boolean;
 }
 
 function todayInSchoolTimezone(): string {
@@ -117,11 +121,11 @@ export async function getAttendanceIntelligence(
   const historyStart = [academicYear.start_date, previous.start].sort()[0];
   const [settingsRows, roster, attendance, staff, staffAttendance, leave, calendar] = await Promise.all([
     repo.listSettings(supabase),
-    repo.listCurrentRoster(supabase, academicYear.id, filters.classId, filters.sectionId),
-    repo.listStudentAttendance(supabase, academicYear.id, historyStart, end, filters.classId, filters.sectionId),
-    repo.listActiveStaff(supabase),
-    repo.listStaffAttendance(supabase, historyStart, end),
-    repo.listApprovedLeave(supabase, historyStart, end),
+    repo.listCurrentRoster(supabase, academicYear.id, filters.classId, filters.sectionId, filters.studentId),
+    repo.listStudentAttendance(supabase, academicYear.id, historyStart, end, filters.classId, filters.sectionId, filters.studentId),
+    filters.includeStaff === false ? Promise.resolve([]) : repo.listActiveStaff(supabase),
+    filters.includeStaff === false ? Promise.resolve([]) : repo.listStaffAttendance(supabase, historyStart, end),
+    filters.includeStaff === false ? Promise.resolve([]) : repo.listApprovedLeave(supabase, historyStart, end),
     repo.listCalendarConfiguration(supabase, academicYear.id, historyStart, end),
   ]);
   const settings = numericSettings(settingsRows);
@@ -165,6 +169,7 @@ export async function getAttendanceIntelligence(
       previousPercentage: previousMetric.percentage,
       differencePoints: trend.differencePoints,
       consecutiveAbsenceDays: streak,
+      latestRecordedAttendanceEvaluation: latestRecordedAttendanceEvaluation(records, streakWorkingDays),
       trend: trend.status,
       severity: maxSeverity(absenceSeverity, lowSeverity, trend.status === "DECLINING" ? "WARNING" : null),
     };
@@ -187,6 +192,7 @@ export async function getAttendanceIntelligence(
       recordedWorkingDays: metric.recordedDays,
       attendancePercentage: metric.percentage,
       consecutiveAbsenceDays: streak,
+      latestRecordedAttendanceEvaluation: latestRecordedAttendanceEvaluation(records, streakWorkingDays),
       severity: streak >= settings.staff_absence_warning_days ? "WARNING" : null,
     };
   });
@@ -196,11 +202,7 @@ export async function getAttendanceIntelligence(
 
 export async function getManagementOverview(supabase: SupabaseClient): Promise<ManagementOverview> {
   const analytics = await getAttendanceIntelligence(supabase);
-  const alertResult = await repo.listAlerts(supabase, { pageSize: 100 });
-  const open = alertResult.rows.filter((alert) => alert.status === "OPEN" || alert.status === "ACKNOWLEDGED");
-  const resolved = alertResult.rows.filter(
-    (alert) => alert.status === "RESOLVED" && alert.resolved_at && alert.resolved_at.slice(0, 10) >= analytics.start,
-  );
+  const alertSummary = await repo.getAlertSummary(supabase, analytics.start, analytics.end);
   const today = analytics.end;
 
   if (!analytics.academicYear || !analytics.settings) {
@@ -238,6 +240,7 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
   ]);
   const studentRecorded = todayStudentRows.length;
   const studentPresent = todayStudentRows.filter((row) => ["present", "late", "half_day"].includes(row.status)).length;
+  const studentTodayMetric = calculateAttendance(todayStudentRows, [today]);
   const studentAbsent = todayStudentRows.filter((row) => row.status === "absent").length;
   const staffRecorded = todayStaffRows.filter(
     (row) => row.status !== "leave" && !isDateCoveredByApprovedLeave(row.staff_id, today, leave),
@@ -253,16 +256,14 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
     academicYearId: analytics.academicYear.id,
     academicYearLabel: analytics.academicYear.year_label,
     schoolStatus: {
-      openCritical: open.filter((alert) => alert.severity === "CRITICAL").length,
-      openWarnings: open.filter((alert) => alert.severity === "WARNING").length,
-      resolvedThisPeriod: resolved.length,
+      ...alertSummary,
     },
     students: {
       active: analytics.studentInsights.length,
       presentToday: { value: studentRecorded ? studentPresent : null, dataAvailable: studentRecorded > 0 },
       absentToday: { value: studentRecorded ? studentAbsent : null, dataAvailable: studentRecorded > 0 },
       attendanceTodayPercentage: {
-        value: studentRecorded ? Math.round((studentPresent / studentRecorded) * 10_000) / 100 : null,
+        value: studentTodayMetric.percentage,
         dataAvailable: studentRecorded > 0,
       },
       absentWarning: analytics.studentInsights.filter(
@@ -319,6 +320,28 @@ interface AlertCandidate {
   message: string;
   current_value: number;
   threshold_value: number;
+}
+
+export function hasAttendanceResolutionEvidence(
+  alert: ManagementAlert,
+  studentInsights: StudentInsight[],
+  staffInsights: StaffInsight[],
+): boolean {
+  if (alert.rule_key === "student_consecutive_absence") {
+    return studentInsights.find((row) => row.studentId === alert.student_id)?.latestRecordedAttendanceEvaluation === "NON_ABSENT";
+  }
+  if (alert.rule_key === "student_low_attendance") {
+    const row = studentInsights.find((item) => item.studentId === alert.student_id);
+    return Boolean(row && row.attendancePercentage !== null);
+  }
+  if (alert.rule_key === "student_attendance_decline") {
+    const row = studentInsights.find((item) => item.studentId === alert.student_id);
+    return Boolean(row && row.differencePoints !== null);
+  }
+  if (alert.rule_key === "staff_consecutive_absence") {
+    return staffInsights.find((row) => row.staffId === alert.staff_id)?.latestRecordedAttendanceEvaluation === "NON_ABSENT";
+  }
+  return false;
 }
 
 export async function refreshAttendanceAlerts(supabase: SupabaseClient) {
@@ -464,6 +487,7 @@ export async function refreshAttendanceAlerts(supabase: SupabaseClient) {
   let resolved = 0;
   for (const alert of active) {
     if (candidateFingerprints.has(alert.fingerprint)) continue;
+    if (!hasAttendanceResolutionEvidence(alert, analytics.studentInsights, analytics.staffInsights)) continue;
     const updatedAlert = await repo.updateAlert(supabase, alert.id, {
       status: "RESOLVED",
       resolved_at: new Date().toISOString(),
@@ -474,7 +498,7 @@ export async function refreshAttendanceAlerts(supabase: SupabaseClient) {
       event_type: "AUTO_RESOLVED",
       from_status: alert.status,
       to_status: "RESOLVED",
-      note: "The deterministic condition was no longer present during refresh.",
+      note: "Positive attendance evidence showed that the deterministic condition was no longer present.",
     });
     resolved += 1;
   }
@@ -487,6 +511,9 @@ export async function transitionAlert(
   status: "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED",
   note?: string,
 ) {
+  if (!isAlertTransitionAllowed(alert.status, status)) {
+    throw new Error(`Cannot transition an alert from ${alert.status} to ${status}.`);
+  }
   const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
   const now = new Date().toISOString();
   const value: Record<string, unknown> = { status };
@@ -520,3 +547,27 @@ export async function updateNumericSetting(supabase: SupabaseClient, settingKey:
 }
 export const listAcademicYears = repo.listAcademicYears;
 export const listClassesAndSections = repo.listClassesAndSections;
+export const listWeeklyOffDays = repo.listWeeklyOffDays;
+
+export async function listStudentOptions(supabase: SupabaseClient, academicYearId?: string) {
+  const academicYear = academicYearId
+    ? await repo.getAcademicYear(supabase, academicYearId)
+    : await repo.getCurrentAcademicYear(supabase);
+  if (!academicYear) return [];
+  const roster = await repo.listCurrentRoster(supabase, academicYear.id);
+  return roster
+    .map((row) => ({
+      id: row.student_id,
+      admissionNo: row.students.admission_no,
+      name: `${row.students.first_name} ${row.students.last_name}`,
+      className: row.classes.name,
+      sectionName: row.sections.name,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function alertDestination(alert: Pick<ManagementAlert, "student_id" | "staff_id">): string {
+  if (alert.student_id) return `/admin/management-intelligence/attendance?student_id=${encodeURIComponent(alert.student_id)}`;
+  if (alert.staff_id) return `/admin/staff/${encodeURIComponent(alert.staff_id)}`;
+  return "/admin/management-intelligence/alerts";
+}
