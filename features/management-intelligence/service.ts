@@ -854,6 +854,40 @@ export async function refreshAcademicAlerts(supabase: SupabaseClient) {
   let resolved = 0;
   for (const alert of active) {
     if (candidateFingerprints.has(alert.fingerprint)) continue;
+
+    // Phase 2B → 2C model migration: a section-scoped legacy alert
+    // (fingerprint still carries a section_id segment) for a class+subject
+    // that STILL has a fresh, authoritative class+subject alert active
+    // right now is superseded by consolidation, not "recovered". Resolving
+    // it via the normal positive-evidence path below would be silently
+    // wrong (the condition never cleared) or would leave duplicate active
+    // alerts forever (the old resolution path only fires on genuine
+    // improvement). This is a one-time supersession, distinct from both.
+    const isLegacyAcademicLagAlert =
+      (alert.rule_key === "subject_lag_warning" || alert.rule_key === "subject_lag_critical") &&
+      alert.class_id !== null &&
+      alert.subject_id !== null &&
+      alert.fingerprint !== `academic_subject_lag:${ay.id}:${alert.class_id}:${alert.subject_id}`;
+    if (isLegacyAcademicLagAlert) {
+      const expectedFingerprint = `academic_subject_lag:${ay.id}:${alert.class_id}:${alert.subject_id}`;
+      if (candidateFingerprints.has(expectedFingerprint)) {
+        const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
+        await repo.insertAlertEvent(supabase, {
+          alert_id: updatedAlert.id,
+          event_type: "AUTO_RESOLVED",
+          from_status: alert.status,
+          to_status: "RESOLVED",
+          note: "Superseded by the class+subject Management Intelligence alert after academic evidence aggregation was corrected.",
+        });
+        resolved += 1;
+        continue;
+      }
+      // No current candidate for this unit (ON_TRACK/SLIGHTLY_BEHIND/
+      // INSUFFICIENT_DATA) — fall through to the same positive-evidence
+      // check every other alert gets; INSUFFICIENT_DATA still leaves it
+      // untouched, exactly as required.
+    }
+
     const currentRow = rowByKey.get(`${alert.class_id}:${alert.subject_id}`);
     if (!hasAcademicResolutionEvidence(currentRow?.status)) continue; // missing/insufficient data is not recovery evidence
     const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
@@ -1050,8 +1084,49 @@ export function hasPerformanceResolutionEvidence(
   return false;
 }
 
-export async function refreshPerformanceAlerts(supabase: SupabaseClient) {
-  const analytics = await getPerformanceIntelligence(supabase);
+/**
+ * Discovers the LATEST authoritative exam per comparison_group — never a
+ * single global "latest exam" — so refreshPerformanceAlerts can evaluate
+ * every comparison group (Term Exams, Weekly Tests, Unit Tests, ...)
+ * independently in one refresh call. "Latest" means highest sequence_no
+ * within the group, never created_at (a Term Exam published after a
+ * Weekly Test, or vice versa, must not affect which exam represents either
+ * group). Ungrouped exams (comparison_group/sequence_no both null) are
+ * deliberately excluded — there is no deterministic, non-created_at way to
+ * pick "the" ungrouped exam to alert on, and they don't participate in
+ * automatic trend comparison per Phase 2C/2D §7 anyway.
+ */
+async function discoverLatestExamsPerComparisonGroup(supabase: SupabaseClient) {
+  const academicYear = await repo.getCurrentAcademicYear(supabase);
+  if (!academicYear) return { academicYear: null, examIds: [] as string[] };
+
+  const [terms, exams, schedules] = await Promise.all([
+    examsService.listExamTerms(supabase),
+    examsService.listExams(supabase),
+    examsService.listExamSchedules(supabase),
+  ]);
+  const yearTermIds = new Set(terms.filter((term) => term.academic_year_id === academicYear.id).map((term) => term.id));
+  const authoritativeExamIds = new Set(
+    schedules.filter((schedule) => schedule.result_status === "published" || schedule.result_status === "locked").map((schedule) => schedule.exam_id),
+  );
+  const examsWithResults = exams.filter((exam) => yearTermIds.has(exam.term_id) && authoritativeExamIds.has(exam.id));
+
+  const latestByGroup = new Map<string, (typeof examsWithResults)[number]>();
+  for (const exam of examsWithResults) {
+    if (exam.comparison_group === null || exam.sequence_no === null) continue;
+    const current = latestByGroup.get(exam.comparison_group);
+    if (!current || exam.sequence_no > current.sequence_no!) latestByGroup.set(exam.comparison_group, exam);
+  }
+  return { academicYear, examIds: [...latestByGroup.values()].map((exam) => exam.id) };
+}
+
+/** Evaluates and refreshes PERFORMANCE alerts for ONE exam (one comparison
+ * group's latest exam). Kept separate from the dashboard's
+ * getPerformanceIntelligence-driven view and from the multi-group
+ * orchestration in refreshPerformanceAlerts below, so each concern stays
+ * independently testable. */
+async function evaluatePerformanceExam(supabase: SupabaseClient, academicYearId: string, examId: string) {
+  const analytics = await getPerformanceIntelligence(supabase, { academicYearId, examId });
   if (!analytics.academicYear || !analytics.selectedExam || !analytics.settings) return { created: 0, updated: 0, reopened: 0, resolved: 0 };
   const ay = analytics.academicYear;
   const exam = analytics.selectedExam;
@@ -1207,6 +1282,16 @@ export async function refreshPerformanceAlerts(supabase: SupabaseClient) {
     resolved += 1;
   }
   return { created, updated, reopened, resolved };
+}
+
+/** Evaluates every comparison group's latest exam independently in one
+ * refresh call, then combines the results — the dashboard (getPerformance
+ * Intelligence) is unaffected and continues to show a single selected exam. */
+export async function refreshPerformanceAlerts(supabase: SupabaseClient) {
+  const { academicYear, examIds } = await discoverLatestExamsPerComparisonGroup(supabase);
+  if (!academicYear || examIds.length === 0) return { created: 0, updated: 0, reopened: 0, resolved: 0 };
+  const results = await Promise.all(examIds.map((examId) => evaluatePerformanceExam(supabase, academicYear.id, examId)));
+  return sumRefresh(...results);
 }
 
 // -----------------------------------------------------------------------------
