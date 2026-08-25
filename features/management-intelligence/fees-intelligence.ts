@@ -1,7 +1,7 @@
 import { computeInvoiceBalance } from "@/features/fees/balance";
 import type { FeeInvoice, FeeInvoiceItem, FeePayment } from "@/types/fees";
 import { feeOverdueSeverity } from "./rules";
-import type { AlertSeverity, CoverageStatus, FeeSummary, OverdueStudentRow } from "./types";
+import type { AlertSeverity, CoverageStatus, FeeSummary, OverdueStudentRow, Paginated } from "./types";
 
 const DAY_MS = 86_400_000;
 
@@ -54,6 +54,9 @@ export function summarizeFees(params: {
   classCollection: ClassCollectionRow[];
   feeTypeCollection: FeeTypeCollectionRow[];
   monthlyCollection: MonthlyCollectionRow[];
+  /** Full, unpaginated list — alert refresh needs every overdue student, not
+   * one page of them. Callers that render a table paginate this themselves
+   * (see paginateOverdueStudents below). */
   overdueStudents: OverdueStudentRow[];
 } {
   const { invoices, payments, invoiceItems, feeTypeNames, roster, today, overdueWarningDays, overdueCriticalDays } = params;
@@ -70,10 +73,12 @@ export function summarizeFees(params: {
   let overdueAmount = 0;
   const studentsWithOutstanding = new Set<string>();
   const studentsWithOverdue = new Set<string>();
+  const studentsWithInvoice = new Set<string>();
   const overdueStudents: OverdueStudentRow[] = [];
   const classGroups = new Map<string, ClassCollectionRow>();
 
   for (const invoice of invoices) {
+    studentsWithInvoice.add(invoice.student_id);
     const invoicePayments = paymentsByInvoice.get(invoice.id) ?? [];
     const balance = computeInvoiceBalance(invoice, invoicePayments);
     totalInvoiced += invoice.total_amount;
@@ -157,6 +162,7 @@ export function summarizeFees(params: {
       overdueAmount,
       studentsWithOutstanding: studentsWithOutstanding.size,
       studentsWithOverdue: studentsWithOverdue.size,
+      studentsWithInvoice: studentsWithInvoice.size,
       invoiceCount: invoices.length,
       dataCoverage,
     },
@@ -164,5 +170,16 @@ export function summarizeFees(params: {
     feeTypeCollection,
     monthlyCollection,
     overdueStudents: overdueStudents.sort((a, b) => b.overdueDays - a.overdueDays),
+  };
+}
+
+export function paginateOverdueStudents(rows: OverdueStudentRow[], page?: number, pageSize?: number): Paginated<OverdueStudentRow> {
+  const resolvedPage = Math.max(page ?? 1, 1);
+  const resolvedPageSize = Math.min(Math.max(pageSize ?? 25, 1), 100);
+  return {
+    rows: rows.slice((resolvedPage - 1) * resolvedPageSize, resolvedPage * resolvedPageSize),
+    page: resolvedPage,
+    pageSize: resolvedPageSize,
+    totalCount: rows.length,
   };
 }

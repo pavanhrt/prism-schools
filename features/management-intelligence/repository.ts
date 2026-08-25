@@ -281,6 +281,16 @@ export async function countAlertsFirstDetected(
   return count ?? 0;
 }
 
+/** Grouped, RLS-respecting count of active alerts per student, via the
+ * count_active_management_alerts_by_student() SQL function — never loads
+ * every alert row (repository.listAlerts is capped at pageSize 100) just
+ * to count them, so this stays correct past 100 active alerts. */
+export async function countActiveAlertsByStudent(supabase: SupabaseClient): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc("count_active_management_alerts_by_student");
+  if (error) throw error;
+  return new Map((data ?? []).map((row: { student_id: string; alert_count: number }) => [row.student_id, Number(row.alert_count)]));
+}
+
 export async function getAlert(supabase: SupabaseClient, id: string): Promise<ManagementAlert | null> {
   const { data, error } = await supabase.from("management_alerts").select("*").eq("id", id).maybeSingle();
   if (error) throw error;

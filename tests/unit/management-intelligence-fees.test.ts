@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { summarizeFees } from "@/features/management-intelligence/fees-intelligence";
+import { paginateOverdueStudents, summarizeFees } from "@/features/management-intelligence/fees-intelligence";
+import type { OverdueStudentRow } from "@/features/management-intelligence/types";
 import type { FeeInvoice, FeeInvoiceItem, FeePayment } from "@/types/fees";
 
 function invoice(overrides: Partial<FeeInvoice>): FeeInvoice {
@@ -127,6 +128,53 @@ describe("overdue detection", () => {
     });
     expect(overdueStudents).toHaveLength(0);
     expect(summary.studentsWithOutstanding).toBe(0);
+  });
+});
+
+describe("phase 2b: students-with-invoice coverage", () => {
+  it("counts distinct students with at least one invoice, for the Health Score fee-coverage component", () => {
+    const { summary } = summarizeFees({
+      invoices: [invoice({ id: "inv-1", student_id: "s1" }), invoice({ id: "inv-2", student_id: "s1" }), invoice({ id: "inv-3", student_id: "s2" })],
+      payments: [],
+      invoiceItems: [],
+      feeTypeNames: new Map(),
+      roster: new Map([
+        ["s1", { admissionNo: "A001", studentName: "Asha", classId: "c1", className: "Class 1", sectionId: "sec1", sectionName: "A" }],
+        ["s2", { admissionNo: "A002", studentName: "Bala", classId: "c1", className: "Class 1", sectionId: "sec1", sectionName: "A" }],
+      ]),
+      today: "2026-08-10",
+      overdueWarningDays: 7,
+      overdueCriticalDays: 30,
+    });
+    expect(summary.studentsWithInvoice).toBe(2);
+  });
+});
+
+describe("phase 2b: overdue-students pagination", () => {
+  function row(overrides: Partial<OverdueStudentRow>): OverdueStudentRow {
+    return {
+      studentId: "s1", admissionNo: "A1", studentName: "Student", className: "Class 1", sectionName: "A",
+      invoiceId: "inv-1", invoiceNo: "INV-1", dueDate: "2026-07-01", overdueDays: 10, balance: 1000, severity: "WARNING",
+      ...overrides,
+    };
+  }
+
+  it("paginates without loading unlimited rows into one page", () => {
+    const rows = Array.from({ length: 120 }, (_, i) => row({ studentId: `s${i}`, overdueDays: 120 - i }));
+    const page1 = paginateOverdueStudents(rows, 1, 25);
+    expect(page1.rows).toHaveLength(25);
+    expect(page1.totalCount).toBe(120);
+    expect(page1.rows[0].overdueDays).toBe(120);
+    const page2 = paginateOverdueStudents(rows, 2, 25);
+    expect(page2.rows).toHaveLength(25);
+    expect(page2.rows[0].overdueDays).toBe(95);
+  });
+
+  it("clamps page size to a sane maximum", () => {
+    const rows = Array.from({ length: 150 }, (_, i) => row({ studentId: `s${i}` }));
+    const page = paginateOverdueStudents(rows, 1, 500);
+    expect(page.pageSize).toBe(100);
+    expect(page.rows).toHaveLength(100);
   });
 });
 

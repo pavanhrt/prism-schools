@@ -6,6 +6,7 @@ import type {
   CoverageStatus,
   DeliveryStatus,
   HealthComponentInput,
+  HealthComponentResult,
   HealthScoreResult,
   PerformanceTrendResult,
   TrendStatus,
@@ -196,6 +197,20 @@ export function computeCoverage(activeCount: number, recordedCount: number): Cov
   };
 }
 
+/**
+ * Daily attendance coverage, aware of the school calendar. On a non-working
+ * day (weekly off-day or a holiday override), zero recorded attendance is
+ * expected — showing "N students missing attendance" on a Sunday is a false
+ * data-quality alarm, not a real gap. missingCount is forced to 0 rather
+ * than left to be misread as a backlog that needs entering.
+ */
+export function computeDailyCoverage(activeCount: number, recordedCount: number, isWorkingDay: boolean): CoverageMetric {
+  if (!isWorkingDay) {
+    return { activeCount, recordedCount, missingCount: 0, coveragePercentage: null, status: "NOT_EXPECTED" };
+  }
+  return computeCoverage(activeCount, recordedCount);
+}
+
 // -----------------------------------------------------------------------------
 // Phase 2: academic delivery lag. Lag is only ever computed from an actual
 // overdue lesson plan (planned_date in the past, not completed); with no such
@@ -250,6 +265,29 @@ export function denseRankByScore(scores: number[]): number[] {
 }
 
 // -----------------------------------------------------------------------------
+// Phase 2B: fee collection-rate warning. The same gate governs both raising
+// and clearing the alert, so "missing fee data" can never accidentally
+// satisfy either direction — it only ever leaves the alert exactly as it was.
+// -----------------------------------------------------------------------------
+export function feeCollectionRateBelowThreshold(
+  dataCoverage: CoverageStatus,
+  collectionPercentage: number | null,
+  warningThresholdPct: number,
+): boolean {
+  if (dataCoverage === "NOT_RECORDED" || collectionPercentage === null) return false;
+  return collectionPercentage < warningThresholdPct;
+}
+
+export function feeCollectionRateRecovered(
+  dataCoverage: CoverageStatus,
+  collectionPercentage: number | null,
+  warningThresholdPct: number,
+): boolean {
+  if (dataCoverage === "NOT_RECORDED" || collectionPercentage === null) return false;
+  return collectionPercentage >= warningThresholdPct;
+}
+
+// -----------------------------------------------------------------------------
 // Phase 2: fee overdue severity, driven by configured day thresholds.
 // -----------------------------------------------------------------------------
 export function feeOverdueSeverity(
@@ -264,34 +302,31 @@ export function feeOverdueSeverity(
 }
 
 // -----------------------------------------------------------------------------
-// Phase 2: School Health Score. Missing components are excluded and the
-// remaining weights are re-normalized, rather than scoring a missing
-// component as zero (which would unfairly punish the school for a data gap).
+// Phase 2B: School Health Score, coverage-aware. A component isn't simply
+// "available" or "unavailable" — 5 evaluated students out of 200 is real
+// data, but it shouldn't carry the same weight as 200/200. Each component's
+// configured weight is scaled by how much of its expected population it
+// actually covers (effectiveWeight = weight * coveragePercentage / 100)
+// before being folded into the weighted average. A component at 0%
+// coverage contributes no score and no weight — never scored as zero.
 // -----------------------------------------------------------------------------
 export function computeHealthScore(components: HealthComponentInput[]): HealthScoreResult {
   const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
-  const available = components.filter((component) => component.score !== null);
-  const availableWeight = available.reduce((sum, component) => sum + component.weight, 0);
-  const unavailable = components.filter((component) => component.score === null).map((component) => component.label);
+  const withEffectiveWeight: HealthComponentResult[] = components.map((component) => ({
+    ...component,
+    effectiveWeight: Math.round(component.weight * (component.coveragePercentage / 100) * 10_000) / 10_000,
+  }));
+  const sumEffectiveWeight = withEffectiveWeight.reduce((sum, component) => sum + component.effectiveWeight, 0);
   const score =
-    availableWeight > 0
+    sumEffectiveWeight > 0
       ? Math.round(
-          (available.reduce((sum, component) => sum + component.score! * component.weight, 0) / availableWeight) * 100,
+          (withEffectiveWeight.reduce((sum, component) => sum + (component.score ?? 0) * component.effectiveWeight, 0) / sumEffectiveWeight) *
+            100,
         ) / 100
       : null;
-  const coveragePercentage = totalWeight > 0 ? Math.round((availableWeight / totalWeight) * 10_000) / 100 : 0;
-  return {
-    score,
-    coveragePercentage,
-    unavailable,
-    components: components.map((component) => ({
-      key: component.key,
-      label: component.label,
-      weight: component.weight,
-      score: component.score,
-      available: component.score !== null,
-    })),
-  };
+  const coveragePercentage = totalWeight > 0 ? Math.round((sumEffectiveWeight / totalWeight) * 10_000) / 100 : 0;
+  const unavailable = components.filter((component) => component.coveragePercentage <= 0).map((component) => component.label);
+  return { score, coveragePercentage, unavailable, components: withEffectiveWeight };
 }
 
 export type HealthLabel = "Excellent" | "Good" | "Attention Needed" | "Critical Attention" | "Not Available";

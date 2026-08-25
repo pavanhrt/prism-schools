@@ -6,8 +6,8 @@ import * as teachingService from "@/features/teaching/service";
 import type { ExamResult, ExamSchedule } from "@/types/exams";
 import * as repo from "./repository";
 import { summarizeAcademicDelivery } from "./academics";
-import { summarizeFees } from "./fees-intelligence";
-import { summarizeClassPerformance, summarizeStudentPerformance } from "./performance";
+import { paginateOverdueStudents, summarizeFees } from "./fees-intelligence";
+import { selectPreviousComparableExam, summarizeClassPerformance, summarizeStudentPerformance } from "./performance";
 import {
   addDays,
   attendanceTrend,
@@ -15,8 +15,11 @@ import {
   buildWorkingDays,
   calculateAttendance,
   computeCoverage,
+  computeDailyCoverage,
   computeHealthScore,
   consecutiveAbsenceDays,
+  feeCollectionRateBelowThreshold,
+  feeCollectionRateRecovered,
   feeOverdueSeverity,
   healthLabel,
   lowAttendanceSeverity,
@@ -33,6 +36,7 @@ import type {
   ManagementOverview,
   StaffInsight,
   StudentInsight,
+  StudentPerformanceInsight,
 } from "./types";
 
 const SETTING_DEFAULTS = {
@@ -255,12 +259,15 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
       },
       staff: {
         active: 0,
+        expectedToday: 0,
+        approvedLeaveToday: 0,
         presentToday: { value: null, dataAvailable: false },
         absentToday: { value: null, dataAvailable: false },
         attendancePercentage: { value: null, dataAvailable: false },
         absentWarning: 0,
         coverageToday: computeCoverage(0, 0),
       },
+      todayIsWorkingDay: false,
       evaluationMessage: "No current academic year is configured.",
     };
   }
@@ -270,17 +277,35 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
     repo.listStaffAttendance(supabase, today, today),
     repo.listApprovedLeave(supabase, today, today),
   ]);
-  const studentRecorded = todayStudentRows.length;
-  const studentPresent = todayStudentRows.filter((row) => ["present", "late", "half_day"].includes(row.status)).length;
-  const studentTodayMetric = calculateAttendance(todayStudentRows, [today]);
-  const studentAbsent = todayStudentRows.filter((row) => row.status === "absent").length;
-  const staffRecorded = todayStaffRows.filter(
-    (row) => row.status !== "leave" && !isDateCoveredByApprovedLeave(row.staff_id, today, leave),
+
+  // Coverage/attendance-today figures must only ever reflect the ACTIVE
+  // current-roster population. An attendance row for a student/staff member
+  // outside that population (inactive, not currently enrolled, etc.) must
+  // never inflate "recorded" — otherwise coverage can exceed 100%.
+  const activeStudentIds = new Set(analytics.studentInsights.map((row) => row.studentId));
+  const scopedTodayStudentRows = todayStudentRows.filter((row) => activeStudentIds.has(row.student_id));
+  const studentRecorded = scopedTodayStudentRows.length;
+  const studentPresent = scopedTodayStudentRows.filter((row) => ["present", "late", "half_day"].includes(row.status)).length;
+  const studentTodayMetric = calculateAttendance(scopedTodayStudentRows, [today]);
+  const studentAbsent = scopedTodayStudentRows.filter((row) => row.status === "absent").length;
+
+  // Staff denominator excludes anyone on approved leave today — leave is
+  // not absence, and it must not inflate "missing attendance" either.
+  const activeStaffIds = new Set(analytics.staffInsights.map((row) => row.staffId));
+  const approvedLeaveStaffIds = new Set(
+    [...activeStaffIds].filter((staffId) => isDateCoveredByApprovedLeave(staffId, today, leave)),
   );
-  const staffPresent = staffRecorded.filter((row) => ["present", "late", "half_day"].includes(row.status)).length;
-  const staffAbsent = staffRecorded.filter((row) => row.status === "absent").length;
+  const expectedStaffIds = new Set([...activeStaffIds].filter((staffId) => !approvedLeaveStaffIds.has(staffId)));
+  const scopedTodayStaffRows = todayStaffRows.filter((row) => expectedStaffIds.has(row.staff_id) && row.status !== "leave");
+  const staffRecorded = scopedTodayStaffRows.length;
+  const staffPresent = scopedTodayStaffRows.filter((row) => ["present", "late", "half_day"].includes(row.status)).length;
+  const staffAbsent = scopedTodayStaffRows.filter((row) => row.status === "absent").length;
+
   const studentData = analytics.studentInsights.some((row) => row.recordedWorkingDays > 0);
   const staffData = analytics.staffInsights.some((row) => row.recordedWorkingDays > 0);
+  // analytics.end always equals `today` here (getAttendanceIntelligence was
+  // called with no filters), so this working-days list already covers today.
+  const todayIsWorkingDay = analytics.workingDays.includes(today);
 
   return {
     periodStart: analytics.start,
@@ -310,12 +335,14 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
       belowCritical: analytics.studentInsights.filter(
         (row) => row.attendancePercentage !== null && row.attendancePercentage < analytics.settings.student_low_attendance_critical_pct,
       ).length,
-      coverageToday: computeCoverage(analytics.studentInsights.length, studentRecorded),
+      coverageToday: computeDailyCoverage(analytics.studentInsights.length, studentRecorded, todayIsWorkingDay),
     },
     staff: {
       active: analytics.staffInsights.length,
-      presentToday: { value: staffRecorded.length ? staffPresent : null, dataAvailable: staffRecorded.length > 0 },
-      absentToday: { value: staffRecorded.length ? staffAbsent : null, dataAvailable: staffRecorded.length > 0 },
+      expectedToday: expectedStaffIds.size,
+      approvedLeaveToday: approvedLeaveStaffIds.size,
+      presentToday: { value: staffRecorded ? staffPresent : null, dataAvailable: staffRecorded > 0 },
+      absentToday: { value: staffRecorded ? staffAbsent : null, dataAvailable: staffRecorded > 0 },
       attendancePercentage: {
         value: staffData
           ? Math.round(
@@ -329,8 +356,9 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
       absentWarning: analytics.staffInsights.filter(
         (row) => row.consecutiveAbsenceDays >= analytics.settings.staff_absence_warning_days,
       ).length,
-      coverageToday: computeCoverage(analytics.staffInsights.length, todayStaffRows.length),
+      coverageToday: computeDailyCoverage(expectedStaffIds.size, staffRecorded, todayIsWorkingDay),
     },
+    todayIsWorkingDay,
     evaluationMessage: studentData || staffData ? null : "Insufficient attendance data to evaluate attendance rules.",
   };
 }
@@ -633,6 +661,8 @@ export interface AcademicFilters {
   subjectId?: string;
   teacherId?: string;
   status?: DeliveryStatus;
+  page?: number;
+  pageSize?: number;
 }
 
 export async function getAcademicIntelligence(supabase: SupabaseClient, filters: AcademicFilters = {}) {
@@ -640,7 +670,9 @@ export async function getAcademicIntelligence(supabase: SupabaseClient, filters:
     ? await repo.getAcademicYear(supabase, filters.academicYearId)
     : await repo.getCurrentAcademicYear(supabase);
   const asOfDate = filters.end ?? todayInSchoolTimezone();
-  if (!academicYear) return { academicYear: null, asOfDate, rows: [], settings: null };
+  const page = Math.max(filters.page ?? 1, 1);
+  const pageSize = Math.min(Math.max(filters.pageSize ?? 25, 1), 100);
+  if (!academicYear) return { academicYear: null, asOfDate, rows: [], pageRows: [], page, pageSize, totalCount: 0, settings: null };
 
   const [settingsRows, assignments, lessonPlans, classesAndSections, subjects, teacherProfiles, calendar] = await Promise.all([
     repo.listSettings(supabase),
@@ -692,8 +724,29 @@ export async function getAcademicIntelligence(supabase: SupabaseClient, filters:
   });
 
   const filteredRows = filters.status ? insights.filter((item) => item.status === filters.status) : insights;
+  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
 
-  return { academicYear, asOfDate, rows: filteredRows, settings, classesAndSections, subjects, teacherProfiles };
+  return {
+    academicYear,
+    asOfDate,
+    rows: filteredRows,
+    pageRows,
+    page,
+    pageSize,
+    totalCount: filteredRows.length,
+    settings,
+    classesAndSections,
+    subjects,
+    teacherProfiles,
+  };
+}
+
+/** Positive resolution evidence for an academic lag alert: the class/subject
+ * must still be evaluable (not INSUFFICIENT_DATA — a deleted lesson plan or
+ * a removed assignment is missing data, not recovery) AND its lag must now
+ * be below the warning threshold (ON_TRACK or SLIGHTLY_BEHIND). */
+export function hasAcademicResolutionEvidence(status: DeliveryStatus | undefined): boolean {
+  return status === "ON_TRACK" || status === "SLIGHTLY_BEHIND";
 }
 
 export async function refreshAcademicAlerts(supabase: SupabaseClient) {
@@ -776,17 +829,20 @@ export async function refreshAcademicAlerts(supabase: SupabaseClient) {
   }
 
   const candidateFingerprints = new Set(candidates.map((item) => item.fingerprint));
+  const rowByKey = new Map(analytics.rows.map((row) => [`${row.classId}:${row.sectionId}:${row.subjectId}`, row]));
   const active = await repo.listActiveAcademicAlerts(supabase, ay.id);
   let resolved = 0;
   for (const alert of active) {
     if (candidateFingerprints.has(alert.fingerprint)) continue;
+    const currentRow = rowByKey.get(`${alert.class_id}:${alert.section_id}:${alert.subject_id}`);
+    if (!hasAcademicResolutionEvidence(currentRow?.status)) continue; // missing/insufficient data is not recovery evidence
     const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
     await repo.insertAlertEvent(supabase, {
       alert_id: updatedAlert.id,
       event_type: "AUTO_RESOLVED",
       from_status: alert.status,
       to_status: "RESOLVED",
-      note: "The subject's delivery lag no longer meets the warning/critical threshold.",
+      note: "The subject's delivery lag is evaluated and now below the warning threshold.",
     });
     resolved += 1;
   }
@@ -798,12 +854,15 @@ export async function refreshAcademicAlerts(supabase: SupabaseClient) {
 // -----------------------------------------------------------------------------
 export interface PerformanceFilters {
   academicYearId?: string;
+  termId?: string;
   examId?: string;
   classId?: string;
   sectionId?: string;
   subjectId?: string;
   studentId?: string;
   trend?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 function examResultToRow(result: ExamResult, scheduleById: Map<string, ExamSchedule>, subjectById: Map<string, string>) {
@@ -824,7 +883,23 @@ export async function getPerformanceIntelligence(supabase: SupabaseClient, filte
   const academicYear = filters.academicYearId
     ? await repo.getAcademicYear(supabase, filters.academicYearId)
     : await repo.getCurrentAcademicYear(supabase);
-  if (!academicYear) return { academicYear: null, exams: [], selectedExam: null, previousExam: null, insights: [], classSummary: [], settings: null };
+  const page = Math.max(filters.page ?? 1, 1);
+  const pageSize = Math.min(Math.max(filters.pageSize ?? 50, 1), 100);
+  const empty = {
+    academicYear: null as Awaited<ReturnType<typeof repo.getAcademicYear>>,
+    terms: [] as Awaited<ReturnType<typeof examsService.listExamTerms>>,
+    exams: [] as Awaited<ReturnType<typeof examsService.listExams>>,
+    selectedExam: null as Awaited<ReturnType<typeof examsService.listExams>>[number] | null,
+    previousExam: null as Awaited<ReturnType<typeof examsService.listExams>>[number] | null,
+    insights: [] as ReturnType<typeof summarizeStudentPerformance>,
+    pageInsights: [] as ReturnType<typeof summarizeStudentPerformance>,
+    page,
+    pageSize,
+    totalCount: 0,
+    classSummary: [] as ReturnType<typeof summarizeClassPerformance>,
+    settings: null as ReturnType<typeof numericSettings> | null,
+  };
+  if (!academicYear) return empty;
 
   const [settingsRows, terms, exams, schedules, gradeScales, roster, subjects] = await Promise.all([
     repo.listSettings(supabase),
@@ -838,23 +913,27 @@ export async function getPerformanceIntelligence(supabase: SupabaseClient, filte
   const settings = numericSettings(settingsRows);
   const subjectById = new Map(subjects.map((item) => [item.id, item.name]));
 
-  // Comparable-exam logic (documented in ./performance.ts): exams within the
-  // same academic year, ordered by creation time (no explicit sequence
-  // column exists), restricted to schedules with an authoritative
-  // (published/locked) result status.
-  const termIdsForYear = new Set(terms.filter((term) => term.academic_year_id === academicYear.id).map((term) => term.id));
-  const yearExams = [...exams].filter((exam) => termIdsForYear.has(exam.term_id)).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const yearTerms = terms.filter((term) => term.academic_year_id === academicYear.id);
+  const termIdsInScope = filters.termId ? new Set([filters.termId]) : new Set(yearTerms.map((term) => term.id));
+  const scopedExams = [...exams].filter((exam) => termIdsInScope.has(exam.term_id));
   const authoritativeSchedules = schedules.filter((schedule) => schedule.result_status === "published" || schedule.result_status === "locked");
   const schedulesByExam = groupBy(authoritativeSchedules, (schedule) => schedule.exam_id);
-  const examsWithResults = yearExams.filter((exam) => (schedulesByExam.get(exam.id) ?? []).length > 0);
+  const examsWithResults = scopedExams.filter((exam) => (schedulesByExam.get(exam.id) ?? []).length > 0);
 
-  if (examsWithResults.length === 0) {
-    return { academicYear, exams: yearExams, selectedExam: null, previousExam: null, insights: [], classSummary: [], settings };
-  }
+  if (examsWithResults.length === 0) return { ...empty, academicYear, terms: yearTerms, settings };
 
-  const selectedExam = (filters.examId && examsWithResults.find((exam) => exam.id === filters.examId)) || examsWithResults[examsWithResults.length - 1];
-  const selectedIndex = examsWithResults.findIndex((exam) => exam.id === selectedExam.id);
-  const previousExam = selectedIndex > 0 ? examsWithResults[selectedIndex - 1] : null;
+  const selectedExam =
+    (filters.examId && examsWithResults.find((exam) => exam.id === filters.examId)) ||
+    [...examsWithResults].sort((a, b) => a.created_at.localeCompare(b.created_at))[examsWithResults.length - 1];
+
+  // Comparability is EXPLICIT ONLY — see selectPreviousComparableExam in
+  // ./performance.ts. created_at, exam name text, and term ordering are
+  // never used to infer it.
+  const comparableCandidate = selectPreviousComparableExam(
+    { id: selectedExam.id, comparisonGroup: selectedExam.comparison_group, sequenceNo: selectedExam.sequence_no },
+    examsWithResults.map((exam) => ({ id: exam.id, comparisonGroup: exam.comparison_group, sequenceNo: exam.sequence_no })),
+  );
+  const previousExam = comparableCandidate ? examsWithResults.find((exam) => exam.id === comparableCandidate.id)! : null;
 
   const scopeFilter = (schedule: (typeof authoritativeSchedules)[number]) =>
     (!filters.classId || schedule.class_id === filters.classId) && (!filters.subjectId || schedule.subject_id === filters.subjectId);
@@ -877,6 +956,9 @@ export async function getPerformanceIntelligence(supabase: SupabaseClient, filte
     sectionName: item.sections.name,
   }));
 
+  // Ranking is computed here, over the FULL relevant roster, before any
+  // trend filter or pagination slice — so class rank stays correct for the
+  // whole class even when the table below only renders one page of it.
   let insights = summarizeStudentPerformance({
     roster: rosterEntries,
     selectedExamId: selectedExam.id,
@@ -891,8 +973,41 @@ export async function getPerformanceIntelligence(supabase: SupabaseClient, filte
 
   const classSummary = summarizeClassPerformance(insights);
   if (filters.trend) insights = insights.filter((item) => item.trend === filters.trend);
+  const totalCount = insights.length;
+  const pageInsights = insights.slice((page - 1) * pageSize, page * pageSize);
 
-  return { academicYear, exams: examsWithResults, selectedExam, previousExam, insights, classSummary, settings };
+  return {
+    academicYear,
+    terms: yearTerms,
+    exams: examsWithResults,
+    selectedExam,
+    previousExam,
+    insights,
+    pageInsights,
+    page,
+    pageSize,
+    totalCount,
+    classSummary,
+    settings,
+  };
+}
+
+/** Positive resolution evidence for a performance alert: the student must
+ * have an actual evaluated result in the newer exam (missing data is not
+ * evidence) and, per rule, the specific condition must no longer hold —
+ * for a decline alert this means a genuinely comparable, non-declining
+ * trend (STABLE/IMPROVING/STRONGLY_IMPROVING), never INSUFFICIENT_DATA. */
+export function hasPerformanceResolutionEvidence(
+  ruleKey: string,
+  row: Pick<StudentPerformanceInsight, "latestPercentage" | "trend" | "failedSubjects" | "subjectsRequiringAttention">,
+): boolean {
+  if (row.latestPercentage === null) return false;
+  if (ruleKey === "student_performance_decline") {
+    return row.trend === "STABLE" || row.trend === "IMPROVING" || row.trend === "STRONGLY_IMPROVING";
+  }
+  if (ruleKey === "failed_subjects") return row.failedSubjects.length === 0;
+  if (ruleKey === "multiple_subject_decline") return row.subjectsRequiringAttention.length < 2;
+  return false;
 }
 
 export async function refreshPerformanceAlerts(supabase: SupabaseClient) {
@@ -1015,18 +1130,30 @@ export async function refreshPerformanceAlerts(supabase: SupabaseClient) {
     else updated += 1;
   }
 
+  // Auto-resolve requires explicit NEWER authoritative comparable evidence
+  // for the SAME student — never just "the candidate set moved on". The
+  // fingerprint embeds the exam it was raised against (rule_key:academic_
+  // year_id:exam_id:student_id; none of those segments can contain ':'),
+  // so an alert only becomes eligible once a genuinely newer exam is the
+  // one being evaluated, and only resolves if that newer exam's evaluated
+  // result shows the specific condition has cleared.
   const candidateFingerprints = new Set(candidates.map((item) => item.fingerprint));
+  const insightByStudent = new Map(analytics.insights.map((row) => [row.studentId, row]));
   const active = await repo.listActivePerformanceAlerts(supabase, ay.id);
   let resolved = 0;
   for (const alert of active) {
     if (candidateFingerprints.has(alert.fingerprint)) continue;
+    const alertExamId = alert.fingerprint.split(":")[2];
+    if (alertExamId === exam.id) continue; // no newer exam has been evaluated since this alert was raised
+    const currentRow = alert.student_id ? insightByStudent.get(alert.student_id) : undefined;
+    if (!currentRow || !hasPerformanceResolutionEvidence(alert.rule_key, currentRow)) continue;
     const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
     await repo.insertAlertEvent(supabase, {
       alert_id: updatedAlert.id,
       event_type: "AUTO_RESOLVED",
       from_status: alert.status,
       to_status: "RESOLVED",
-      note: "The condition was no longer present in the latest performance evaluation.",
+      note: `A newer comparable, authoritative evaluation (${exam.name}) shows the condition has cleared.`,
     });
     resolved += 1;
   }
@@ -1040,6 +1167,15 @@ export interface FeeFilters {
   academicYearId?: string;
   classId?: string;
   sectionId?: string;
+  feeTypeId?: string;
+  /** Invoice due_date range — explicit to avoid ambiguity with payment
+   * date. There is no separate payment-date filter in this dashboard;
+   * Monthly Collection already breaks payments down by calendar month. */
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  overdueSeverity?: AlertSeverity;
+  overduePage?: number;
+  overduePageSize?: number;
 }
 
 export async function getFeeIntelligence(supabase: SupabaseClient, filters: FeeFilters = {}) {
@@ -1048,11 +1184,12 @@ export async function getFeeIntelligence(supabase: SupabaseClient, filters: FeeF
     : await repo.getCurrentAcademicYear(supabase);
   const today = todayInSchoolTimezone();
 
-  const [settingsRows, invoices, payments, invoiceItems, feeTypes, roster] = await Promise.all([
+  // Scoped to one academic year at the database level — never a full
+  // school-history fetch — and further scoped to a class/section roster
+  // in-memory only after that (roster size is bounded by one class/year).
+  const [settingsRows, invoices, feeTypes, roster] = await Promise.all([
     repo.listSettings(supabase),
-    feesService.listInvoices(supabase),
-    feesService.listAllPayments(supabase),
-    feesService.listAllInvoiceItems(supabase),
+    academicYear ? feesService.listInvoicesForYear(supabase, academicYear.id, filters.dueDateFrom, filters.dueDateTo) : Promise.resolve([]),
     feesService.listFeeTypes(supabase),
     academicYear ? repo.listCurrentRoster(supabase, academicYear.id, filters.classId, filters.sectionId) : Promise.resolve([]),
   ]);
@@ -1071,13 +1208,25 @@ export async function getFeeIntelligence(supabase: SupabaseClient, filters: FeeF
     ]),
   );
   const isClassScoped = Boolean(filters.classId || filters.sectionId);
-  const scopedInvoices = invoices.filter(
-    (invoice) => (!academicYear || invoice.academic_year_id === academicYear.id) && (!isClassScoped || rosterMap.has(invoice.student_id)),
-  );
+  let scopedInvoices = invoices.filter((invoice) => !isClassScoped || rosterMap.has(invoice.student_id));
+
+  const invoiceIds = scopedInvoices.map((invoice) => invoice.id);
+  const [payments, allInvoiceItems] = await Promise.all([
+    feesService.listPaymentsForInvoices(supabase, invoiceIds),
+    feesService.listInvoiceItemsForInvoices(supabase, invoiceIds),
+  ]);
+
+  if (filters.feeTypeId) {
+    const invoiceIdsWithFeeType = new Set(allInvoiceItems.filter((item) => item.fee_type_id === filters.feeTypeId).map((item) => item.invoice_id));
+    scopedInvoices = scopedInvoices.filter((invoice) => invoiceIdsWithFeeType.has(invoice.id));
+  }
+  const scopedInvoiceIdSet = new Set(scopedInvoices.map((invoice) => invoice.id));
+  const invoiceItems = allInvoiceItems.filter((item) => scopedInvoiceIdSet.has(item.invoice_id));
+  const scopedPayments = payments.filter((payment) => scopedInvoiceIdSet.has(payment.invoice_id));
 
   const result = summarizeFees({
     invoices: scopedInvoices,
-    payments,
+    payments: scopedPayments,
     invoiceItems,
     feeTypeNames: new Map(feeTypes.map((item) => [item.id, item.name])),
     roster: rosterMap,
@@ -1085,8 +1234,12 @@ export async function getFeeIntelligence(supabase: SupabaseClient, filters: FeeF
     overdueWarningDays: settings.fee_overdue_warning_days,
     overdueCriticalDays: settings.fee_overdue_critical_days,
   });
+  const scopedOverdueStudents = filters.overdueSeverity
+    ? result.overdueStudents.filter((row) => row.severity === filters.overdueSeverity)
+    : result.overdueStudents;
+  const overdueStudentsPage = paginateOverdueStudents(scopedOverdueStudents, filters.overduePage, filters.overduePageSize);
 
-  return { academicYear, today, settings, ...result };
+  return { academicYear, today, settings, ...result, overdueStudentsPage };
 }
 
 export async function refreshFeeAlerts(supabase: SupabaseClient) {
@@ -1100,9 +1253,9 @@ export async function refreshFeeAlerts(supabase: SupabaseClient) {
     alert_type: string;
     category: "FEES";
     severity: AlertSeverity;
-    entity_type: "student";
+    entity_type: "student" | "academic_year";
     entity_id: string;
-    student_id: string;
+    student_id?: string;
     academic_year_id: string;
     period_start: string;
     period_end: string;
@@ -1153,6 +1306,28 @@ export async function refreshFeeAlerts(supabase: SupabaseClient) {
     }
   }
 
+  // Collection-rate warning: only created when there is actual invoice data
+  // to evaluate — a school with zero invoices this year is NOT_RECORDED,
+  // never misread as a 0% collection crisis.
+  if (feeCollectionRateBelowThreshold(analytics.summary.dataCoverage, analytics.summary.collectionPercentage, settings.fee_collection_rate_warning_pct)) {
+    candidates.push({
+      fingerprint: `fee_collection_rate:${ay.id}`,
+      rule_key: "fee_collection_rate_warning",
+      alert_type: "FEE_COLLECTION_RATE_WARNING",
+      category: "FEES",
+      severity: "WARNING",
+      entity_type: "academic_year",
+      entity_id: ay.id,
+      academic_year_id: ay.id,
+      period_start: ay.start_date,
+      period_end: analytics.today,
+      title: `Fee collection rate is ${analytics.summary.collectionPercentage}%, below the ${settings.fee_collection_rate_warning_pct}% threshold`,
+      message: `Triggered because the academic year's overall collection percentage (${analytics.summary.collectionPercentage}%, across ${analytics.summary.invoiceCount} invoices) is below the configured ${settings.fee_collection_rate_warning_pct}% warning threshold.`,
+      current_value: analytics.summary.collectionPercentage!,
+      threshold_value: settings.fee_collection_rate_warning_pct,
+    });
+  }
+
   const existing = await repo.listAlertsByFingerprints(supabase, candidates.map((item) => item.fingerprint));
   const byFingerprint = new Map(existing.map((alert) => [alert.fingerprint, alert]));
   let created = 0;
@@ -1183,20 +1358,31 @@ export async function refreshFeeAlerts(supabase: SupabaseClient) {
     else updated += 1;
   }
 
-  // AUTO_RESOLVE: an overdue-fee alert clears once its invoice no longer
-  // carries a positive overdue balance (paid down or no longer past due).
+  // AUTO_RESOLVE: an overdue-fee alert clears once a full, complete refresh
+  // of this year's invoices no longer includes it (fee invoices/payments
+  // have no "insufficient data" state the way academics/performance do —
+  // an invoice either exists with a computable balance or it doesn't).
+  // The collection-rate alert is the exception: it must only resolve on
+  // explicit recovery evidence (collectionPercentage back at/above
+  // threshold), never merely because invoice data went missing.
   const candidateFingerprints = new Set(candidates.map((item) => item.fingerprint));
   const active = await repo.listActiveFeeAlerts(supabase, ay.id);
   let resolved = 0;
   for (const alert of active) {
     if (candidateFingerprints.has(alert.fingerprint)) continue;
+    if (alert.rule_key === "fee_collection_rate_warning") {
+      if (!feeCollectionRateRecovered(analytics.summary.dataCoverage, analytics.summary.collectionPercentage, settings.fee_collection_rate_warning_pct)) continue;
+    }
     const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
     await repo.insertAlertEvent(supabase, {
       alert_id: updatedAlert.id,
       event_type: "AUTO_RESOLVED",
       from_status: alert.status,
       to_status: "RESOLVED",
-      note: "The invoice no longer carries an overdue balance.",
+      note:
+        alert.rule_key === "fee_collection_rate_warning"
+          ? `Collection percentage recovered to ${analytics.summary.collectionPercentage}%, at or above the ${settings.fee_collection_rate_warning_pct}% threshold.`
+          : "The invoice no longer carries an overdue balance.",
     });
     resolved += 1;
   }
@@ -1243,6 +1429,10 @@ function academicStatusScore(status: DeliveryStatus): number | null {
   }
 }
 
+function capPercentage(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
 export async function getSchoolHealthScore(supabase: SupabaseClient, academicYearId?: string) {
   const [attendance, academic, performance, fees, settingsRows] = await Promise.all([
     getAttendanceIntelligence(supabase, { academicYearId }),
@@ -1253,39 +1443,86 @@ export async function getSchoolHealthScore(supabase: SupabaseClient, academicYea
   ]);
   const settings = numericSettings(settingsRows);
 
+  // Every component below reports BOTH a score and a coveragePercentage —
+  // how much of its expected population actually has evidence. 5 of 200
+  // students evaluated is real data, but computeHealthScore scales its
+  // effective weight down accordingly rather than trusting it at full
+  // weight (see rules.ts).
+  const activeStudentCount = attendance.studentInsights.length;
+  const studentsWithAttendanceData = attendance.studentInsights.filter((row) => row.recordedWorkingDays > 0).length;
   const studentRecorded = attendance.studentInsights.reduce((sum, row) => sum + row.recordedWorkingDays, 0);
   const studentPresent = attendance.studentInsights.reduce((sum, row) => sum + row.presentDays, 0);
   const studentAttendanceScore = studentRecorded > 0 ? Math.round((studentPresent / studentRecorded) * 10_000) / 100 : null;
+  const studentAttendanceCoverage = activeStudentCount > 0 ? capPercentage(Math.round((studentsWithAttendanceData / activeStudentCount) * 10_000) / 100) : 0;
 
+  const activeStaffCount = attendance.staffInsights.length;
+  const staffWithAttendanceData = attendance.staffInsights.filter((row) => row.recordedWorkingDays > 0).length;
   const staffRecorded = attendance.staffInsights.reduce((sum, row) => sum + row.recordedWorkingDays, 0);
   const staffPresent = attendance.staffInsights.reduce((sum, row) => sum + row.presentDays, 0);
   const staffAttendanceScore = staffRecorded > 0 ? Math.round((staffPresent / staffRecorded) * 10_000) / 100 : null;
+  const staffAttendanceCoverage = activeStaffCount > 0 ? capPercentage(Math.round((staffWithAttendanceData / activeStaffCount) * 10_000) / 100) : 0;
 
   const evaluableAcademicRows = academic.rows.filter((row) => row.status !== "INSUFFICIENT_DATA");
   const academicScores = evaluableAcademicRows.map((row) => academicStatusScore(row.status)).filter((value): value is number => value !== null);
-  const academicProgressScore = academicScores.length > 0 ? Math.round((academicScores.reduce((sum, value) => sum + value, 0) / academicScores.length) * 100) / 100 : null;
-
-  const deliveryRows = academic.rows.filter((row) => row.evidenceCoveragePercentage !== null);
-  const deliveryScore =
-    deliveryRows.length > 0
-      ? Math.round((deliveryRows.reduce((sum, row) => sum + (row.evidenceCoveragePercentage ?? 0), 0) / deliveryRows.length) * 100) / 100
-      : null;
+  const academicProgressScore =
+    academicScores.length > 0 ? Math.round((academicScores.reduce((sum, value) => sum + value, 0) / academicScores.length) * 100) / 100 : null;
+  const academicProgressCoverage =
+    academic.rows.length > 0 ? capPercentage(Math.round((evaluableAcademicRows.length / academic.rows.length) * 10_000) / 100) : 0;
 
   const evaluatedStudents = performance.insights.filter((row) => row.latestPercentage !== null);
   const performanceScore =
     evaluatedStudents.length > 0
       ? Math.round((evaluatedStudents.reduce((sum, row) => sum + (row.latestPercentage ?? 0), 0) / evaluatedStudents.length) * 100) / 100
       : null;
+  const performanceCoverage =
+    performance.insights.length > 0 ? capPercentage(Math.round((evaluatedStudents.length / performance.insights.length) * 10_000) / 100) : 0;
 
   const feeScore = fees.summary.dataCoverage === "NOT_RECORDED" ? null : fees.summary.collectionPercentage;
+  const feeCoverage = activeStudentCount > 0 ? capPercentage(Math.round((fees.summary.studentsWithInvoice / activeStudentCount) * 10_000) / 100) : 0;
 
   const result = computeHealthScore([
-    { key: "student_attendance", label: "Student Attendance", weight: settings.health_weight_student_attendance, score: studentAttendanceScore },
-    { key: "academic_progress", label: "Academic Progress", weight: settings.health_weight_academic_progress, score: academicProgressScore },
-    { key: "performance", label: "Student Performance", weight: settings.health_weight_performance, score: performanceScore },
-    { key: "staff_attendance", label: "Staff Attendance", weight: settings.health_weight_staff_attendance, score: staffAttendanceScore },
-    { key: "delivery", label: "Timetable/Delivery", weight: settings.health_weight_delivery, score: deliveryScore },
-    { key: "fees", label: "Fee Collection", weight: settings.health_weight_fees, score: feeScore },
+    {
+      key: "student_attendance",
+      label: "Student Attendance",
+      weight: settings.health_weight_student_attendance,
+      score: studentAttendanceScore,
+      coveragePercentage: studentAttendanceCoverage,
+    },
+    {
+      key: "academic_progress",
+      label: "Academic Progress",
+      weight: settings.health_weight_academic_progress,
+      score: academicProgressScore,
+      coveragePercentage: academicProgressCoverage,
+    },
+    {
+      key: "performance",
+      label: "Student Performance",
+      weight: settings.health_weight_performance,
+      score: performanceScore,
+      coveragePercentage: performanceCoverage,
+    },
+    {
+      key: "staff_attendance",
+      label: "Staff Attendance",
+      weight: settings.health_weight_staff_attendance,
+      score: staffAttendanceScore,
+      coveragePercentage: staffAttendanceCoverage,
+    },
+    // Deliberately always unavailable: the only evidence available
+    // (lesson_plans.status) is already the source for Academic Progress
+    // above, and there is no actual timetable/session-completion evidence
+    // in this schema. Scoring a second component from the identical signal
+    // would double-count it under a misleading "Timetable/Delivery" label
+    // that implies session-completion proof this system does not have.
+    {
+      key: "delivery",
+      label: "Timetable/Delivery (session-completion evidence not tracked)",
+      weight: settings.health_weight_delivery,
+      score: null,
+      coveragePercentage: 0,
+    },
+    { key: "fees", label: "Fee Collection", weight: settings.health_weight_fees, score: feeScore, coveragePercentage: feeCoverage },
   ]);
 
   return { ...result, label: healthLabel(result.score), academicYearId: attendance.academicYear?.id ?? null };
@@ -1330,23 +1567,21 @@ export async function getWeeklyReview(supabase: SupabaseClient) {
 export async function getMonthlyReview(supabase: SupabaseClient) {
   const today = todayInSchoolTimezone();
   const monthStart = startOfMonth(today);
-  const [attendance, performance, fees, alertSummary, activeAlerts] = await Promise.all([
+  const [attendance, performance, fees, alertSummary, activeAlertCountByStudent] = await Promise.all([
     getAttendanceIntelligence(supabase, { start: monthStart, end: today }),
     getPerformanceIntelligence(supabase),
     getFeeIntelligence(supabase),
     repo.getAlertSummary(supabase, monthStart, today),
-    repo.listAlerts(supabase, { statuses: ["OPEN", "ACKNOWLEDGED"], pageSize: 500 }),
+    // Grouped SQL count, not a raw row fetch — repository.listAlerts caps
+    // pageSize at 100 and would silently undercount past that; this stays
+    // correct at any alert volume.
+    repo.countActiveAlertsByStudent(supabase),
   ]);
   const students = performance.insights;
   const topPerformers = [...students]
     .filter((row) => row.classRank !== null)
     .sort((a, b) => (a.classRank ?? 0) - (b.classRank ?? 0))
     .slice(0, 10);
-  const activeAlertCountByStudent = new Map<string, number>();
-  for (const alert of activeAlerts.rows) {
-    if (!alert.student_id) continue;
-    activeAlertCountByStudent.set(alert.student_id, (activeAlertCountByStudent.get(alert.student_id) ?? 0) + 1);
-  }
   const performanceByStudent = new Map(performance.insights.map((row) => [row.studentId, row]));
   const studentReview = attendance.studentInsights.map((row) => {
     const performanceRow = performanceByStudent.get(row.studentId) ?? null;

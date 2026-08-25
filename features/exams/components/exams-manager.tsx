@@ -42,7 +42,7 @@ export function ExamsManager({
       setError(result.error);
       return;
     }
-    reset({ term_id: values.term_id, name: "", description: "" });
+    reset({ term_id: values.term_id, name: "", description: "", comparison_group: values.comparison_group, sequence_no: undefined });
     router.refresh();
   }
 
@@ -72,6 +72,18 @@ export function ExamsManager({
                 <Label htmlFor="description">Description</Label>
                 <textarea id="description" rows={2} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" {...register("description")} />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="comparison_group">Comparison group (optional)</Label>
+                <Input id="comparison_group" placeholder="e.g. Term Exams" {...register("comparison_group")} />
+                <p className="text-xs text-slate-500">
+                  Exams sharing the same comparison group and an ordered sequence number are the only exams Management Intelligence will ever
+                  compare for a performance trend. Leave blank to keep this exam out of automatic trend comparisons.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="sequence_no">Sequence within group (optional)</Label>
+                <Input id="sequence_no" type="number" min={1} step={1} placeholder="e.g. 1, 2, 3" {...register("sequence_no")} />
+              </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               <Button type="submit" disabled={isSubmitting} className="self-start">
                 {isSubmitting ? "Adding…" : "Add exam"}
@@ -87,6 +99,7 @@ export function ExamsManager({
             <TH>Exam</TH>
             <TH>Term</TH>
             <TH>Status</TH>
+            <TH>Comparison group</TH>
             <TH></TH>
           </TR>
         </THead>
@@ -98,6 +111,7 @@ export function ExamsManager({
               <TD>
                 <Badge variant="outline">{e.status}</Badge>
               </TD>
+              <TD className="text-sm text-slate-600">{e.comparison_group ? `${e.comparison_group} · #${e.sequence_no ?? "—"}` : <span className="text-slate-400">Not comparable</span>}</TD>
               <TD>
                 <Link href={`/admin/exams/${e.id}`} className="text-sm text-slate-600 underline">
                   Manage schedules
@@ -107,7 +121,7 @@ export function ExamsManager({
           ))}
           {exams.length === 0 && (
             <TR>
-              <TD colSpan={4} className="py-8 text-center text-slate-400">
+              <TD colSpan={5} className="py-8 text-center text-slate-400">
                 No exams yet.
               </TD>
             </TR>

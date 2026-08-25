@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions";
 import { MetricCard } from "@/features/management-intelligence/components/metric-card";
@@ -49,7 +50,18 @@ export default async function ManagementIntelligencePage() {
           The School Health Score is an operational management indicator based on available school data. It is not an objective measure of
           educational quality.
         </p>
+        <Table><THead><TR><TH>Component</TH><TH>Score</TH><TH>Configured Weight</TH><TH>Data Coverage</TH><TH>Effective Weight</TH></TR></THead><TBody>
+          {health.components.map((c) => (
+            <TR key={c.key}><TD>{c.label}</TD><TD>{c.score === null ? <span className="text-slate-400">—</span> : c.score}</TD><TD>{c.weight}</TD><TD>{c.coveragePercentage}%</TD><TD>{c.effectiveWeight.toFixed(2)}</TD></TR>
+          ))}
+        </TBody></Table>
       </section>
+
+      {!overview.todayIsWorkingDay && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          Attendance Not Expected Today — Non-working day. Coverage below reflects that, not a data-entry gap.
+        </div>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-slate-900">Student Attendance</h2>
@@ -58,7 +70,7 @@ export default async function ManagementIntelligencePage() {
           <MetricCard label="Present Today" value={displayMetric(overview.students.presentToday)} note="Headcount: present, late, or half-day" />
           <MetricCard label="Absent Today" value={displayMetric(overview.students.absentToday)} />
           <MetricCard label="Today's Attendance" value={displayMetric(overview.students.attendanceTodayPercentage, "%")} note="Weighted: half-day counts as 0.5" />
-          <MetricCard label="Attendance Coverage" value={`${overview.students.coverageToday.recordedCount}/${overview.students.coverageToday.activeCount}`} note={`${overview.students.coverageToday.status.replace(/_/g, " ")}${overview.students.coverageToday.coveragePercentage !== null ? ` · ${overview.students.coverageToday.coveragePercentage}%` : ""}`} />
+          <MetricCard label="Attendance Coverage" value={`${overview.students.coverageToday.recordedCount}/${overview.students.coverageToday.activeCount}`} note={overview.students.coverageToday.status === "NOT_EXPECTED" ? "Non-working day" : `${overview.students.coverageToday.status.replace(/_/g, " ")}${overview.students.coverageToday.coveragePercentage !== null ? ` · ${overview.students.coverageToday.coveragePercentage}%` : ""}`} />
           <MetricCard label="Absent 3+ Days" value={overview.students.absentWarning} />
           <MetricCard label="Absent 5+ Days" value={overview.students.absentCritical} />
           <MetricCard label="Below 75%" value={overview.students.belowWarning} />
@@ -69,12 +81,13 @@ export default async function ManagementIntelligencePage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-slate-900">Staff Attendance</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <MetricCard label="Active Staff" value={overview.staff.active} />
+          <MetricCard label="Approved Leave Today" value={overview.staff.approvedLeaveToday} note="Excluded from expected/missing, not counted as absence" />
           <MetricCard label="Present Today" value={displayMetric(overview.staff.presentToday)} />
           <MetricCard label="Absent Today" value={displayMetric(overview.staff.absentToday)} />
           <MetricCard label="Period Attendance" value={displayMetric(overview.staff.attendancePercentage, "%")} />
-          <MetricCard label="Staff Coverage" value={`${overview.staff.coverageToday.recordedCount}/${overview.staff.coverageToday.activeCount}`} note={`${overview.staff.coverageToday.status.replace(/_/g, " ")}${overview.staff.coverageToday.coveragePercentage !== null ? ` · ${overview.staff.coverageToday.coveragePercentage}%` : ""}`} />
+          <MetricCard label="Staff Coverage" value={`${overview.staff.coverageToday.recordedCount}/${overview.staff.coverageToday.activeCount}`} note={overview.staff.coverageToday.status === "NOT_EXPECTED" ? "Non-working day" : `Expected ${overview.staff.expectedToday} · ${overview.staff.coverageToday.status.replace(/_/g, " ")}${overview.staff.coverageToday.coveragePercentage !== null ? ` · ${overview.staff.coverageToday.coveragePercentage}%` : ""}`} />
           <MetricCard label="Absent 3+ Days" value={overview.staff.absentWarning} />
         </div>
       </section>

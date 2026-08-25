@@ -52,6 +52,23 @@ export async function listInvoices(supabase: SupabaseClient): Promise<FeeInvoice
   return data;
 }
 
+/** Filtered by academic year (and optionally a due-date range) at the
+ * database level — Management Intelligence's Fee dashboard scopes to one
+ * year by default and should never pull every historical invoice to do it. */
+export async function listInvoicesForYear(
+  supabase: SupabaseClient,
+  academicYearId: string,
+  dueDateFrom?: string,
+  dueDateTo?: string,
+): Promise<FeeInvoice[]> {
+  let query = supabase.from("fee_invoices").select("*").eq("academic_year_id", academicYearId).order("created_at", { ascending: false });
+  if (dueDateFrom) query = query.gte("due_date", dueDateFrom);
+  if (dueDateTo) query = query.lte("due_date", dueDateTo);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
 export async function getInvoice(
   supabase: SupabaseClient,
   id: string,
@@ -100,7 +117,23 @@ export async function listAllInvoiceItems(supabase: SupabaseClient): Promise<Fee
   return data;
 }
 
+/** Bulk read scoped to a known set of invoices — avoids fetching every
+ * historical invoice item just to compute one year's fee-type breakdown. */
+export async function listInvoiceItemsForInvoices(supabase: SupabaseClient, invoiceIds: string[]): Promise<FeeInvoiceItem[]> {
+  if (invoiceIds.length === 0) return [];
+  const { data, error } = await supabase.from("fee_invoice_items").select("*").in("invoice_id", invoiceIds);
+  if (error) throw error;
+  return data;
+}
+
 // ---- Payments ----------------------------------------------------------------
+
+export async function listPaymentsForInvoices(supabase: SupabaseClient, invoiceIds: string[]): Promise<FeePayment[]> {
+  if (invoiceIds.length === 0) return [];
+  const { data, error } = await supabase.from("fee_payments").select("*").in("invoice_id", invoiceIds);
+  if (error) throw error;
+  return data;
+}
 
 export async function listAllPayments(supabase: SupabaseClient): Promise<FeePayment[]> {
   const { data, error } = await supabase

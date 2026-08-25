@@ -25,7 +25,13 @@ export async function createExamTerm(supabase: SupabaseClient, input: ExamTermIn
 }
 
 export async function createExam(supabase: SupabaseClient, input: ExamInput) {
-  return repo.insertExam(supabase, { term_id: input.term_id, name: input.name, description: input.description || null });
+  return repo.insertExam(supabase, {
+    term_id: input.term_id,
+    name: input.name,
+    description: input.description || null,
+    comparison_group: input.comparison_group || null,
+    sequence_no: input.sequence_no ? Number(input.sequence_no) : null,
+  });
 }
 
 export async function createExamSchedule(supabase: SupabaseClient, input: ExamScheduleInput) {

@@ -16,6 +16,8 @@ export interface Exam {
   name: string;
   description: string | null;
   status: ExamStatus;
+  comparison_group: string | null;
+  sequence_no: number | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

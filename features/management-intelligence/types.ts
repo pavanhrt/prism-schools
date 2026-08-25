@@ -122,7 +122,14 @@ export interface OverviewMetric {
 // -----------------------------------------------------------------------------
 // Phase 2
 // -----------------------------------------------------------------------------
-export type CoverageStatus = "COMPLETE" | "PARTIAL" | "INCOMPLETE" | "NOT_RECORDED";
+export type CoverageStatus = "COMPLETE" | "PARTIAL" | "INCOMPLETE" | "NOT_RECORDED" | "NOT_EXPECTED";
+
+export interface Paginated<T> {
+  rows: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
 
 export interface CoverageMetric {
   activeCount: number;
@@ -143,6 +150,12 @@ export interface SubjectDeliveryInsight {
   teacherName: string | null;
   sectionId: string | null;
   sectionName: string | null;
+  /** lesson_plans has no section column — every progress/lag/coverage field
+   * below is evaluated at class+subject grain and shared identically across
+   * every section/teacher row for that class+subject. It is never
+   * section-specific or teacher-specific evidence, even though the row
+   * itself carries section/teacher context. */
+  progressEvidenceLevel: "CLASS_SUBJECT";
   scheduledSessions: number;
   evidencedSessions: number;
   notRecordedSessions: number;
@@ -216,15 +229,24 @@ export interface HealthComponentInput {
   key: string;
   label: string;
   weight: number;
+  /** Null only when coveragePercentage is 0 — there is nothing to score. */
   score: number | null;
+  /** 0-100: how much of this component's expected population/data actually
+   * has evidence. A component evaluated for 5 of 200 students has low
+   * coverage even though it technically has "some" data — coverage drives
+   * how much weight it is allowed to carry, not just whether it's present. */
+  coveragePercentage: number;
 }
 
 export interface HealthComponentResult extends HealthComponentInput {
-  available: boolean;
+  /** weight * coveragePercentage / 100 — the weight this component actually
+   * contributed to the score, after coverage-based re-normalization. */
+  effectiveWeight: number;
 }
 
 export interface HealthScoreResult {
   score: number | null;
+  /** Overall coverage across every component, weighted by configured weight. */
   coveragePercentage: number;
   unavailable: string[];
   components: HealthComponentResult[];
@@ -238,6 +260,7 @@ export interface FeeSummary {
   overdueAmount: number;
   studentsWithOutstanding: number;
   studentsWithOverdue: number;
+  studentsWithInvoice: number;
   invoiceCount: number;
   dataCoverage: CoverageStatus;
 }
@@ -279,11 +302,16 @@ export interface ManagementOverview {
   };
   staff: {
     active: number;
+    /** Active staff minus those on approved leave today — the true
+     * denominator attendance coverage is measured against. */
+    expectedToday: number;
+    approvedLeaveToday: number;
     presentToday: OverviewMetric;
     absentToday: OverviewMetric;
     attendancePercentage: OverviewMetric;
     absentWarning: number;
     coverageToday: CoverageMetric;
   };
+  todayIsWorkingDay: boolean;
   evaluationMessage: string | null;
 }

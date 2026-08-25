@@ -73,6 +73,7 @@ export function summarizeAcademicDelivery(params: {
       subjectName: row.subjectName,
       teacherId: row.teacherId,
       teacherName: row.teacherName,
+      progressEvidenceLevel: "CLASS_SUBJECT" as const,
       scheduledSessions: expectedProgress,
       evidencedSessions: actualProgress,
       notRecordedSessions: pendingDue.length,

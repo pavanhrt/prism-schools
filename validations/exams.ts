@@ -5,11 +5,24 @@ export const examTermSchema = z.object({
   name: z.string().trim().min(1, "Term name is required").max(100),
 });
 
-export const examSchema = z.object({
-  term_id: z.string().uuid("Choose a term"),
-  name: z.string().trim().min(1, "Exam name is required").max(100),
-  description: z.string().trim().max(2000).optional().or(z.literal("")),
-});
+export const examSchema = z
+  .object({
+    term_id: z.string().uuid("Choose a term"),
+    name: z.string().trim().min(1, "Exam name is required").max(100),
+    description: z.string().trim().max(2000).optional().or(z.literal("")),
+    comparison_group: z.string().trim().max(100).optional().or(z.literal("")),
+    sequence_no: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Sequence must be a whole number")
+      .max(4)
+      .optional()
+      .or(z.literal("")),
+  })
+  .refine((data) => !data.sequence_no || Number(data.sequence_no) >= 1, {
+    message: "Sequence must be 1 or greater",
+    path: ["sequence_no"],
+  });
 
 export const examScheduleSchema = z
   .object({

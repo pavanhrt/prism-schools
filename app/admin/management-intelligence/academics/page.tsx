@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 import { getAcademicIntelligence, listAcademicYears } from "@/features/management-intelligence/service";
 import { MetricCard } from "@/features/management-intelligence/components/metric-card";
 import type { DeliveryStatus } from "@/features/management-intelligence/types";
@@ -15,7 +17,14 @@ type Params = {
   subject_id?: string;
   teacher_id?: string;
   status?: DeliveryStatus;
+  page?: string;
 };
+
+function pageHref(params: Record<string, string | undefined>, page: number): string {
+  const query = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])));
+  query.set("page", String(page));
+  return query.toString();
+}
 
 const STATUS_BADGE: Record<DeliveryStatus, string> = {
   ON_TRACK: "bg-emerald-100 text-emerald-700",
@@ -37,6 +46,7 @@ export default async function AcademicIntelligencePage({ searchParams }: { searc
       subjectId: params.subject_id,
       teacherId: params.teacher_id,
       status: params.status,
+      page: Number(params.page ?? "1") || 1,
     }),
     listAcademicYears(supabase),
   ]);
@@ -60,6 +70,10 @@ export default async function AcademicIntelligencePage({ searchParams }: { searc
         <p className="text-sm text-slate-500">
           Delivery evidence from lesson plans only. A timetable slot is never treated as a completed class, and a missing lesson plan is never
           treated as a missed one — status reflects only what has actually been recorded.
+        </p>
+        <p className="mt-1 text-xs text-slate-400">
+          Lesson plans are recorded at class + subject level, not per section or teacher. Expected/Actual/Lag/Status below are the same evidence
+          shared across every section and teacher row for that class + subject — never independent section- or teacher-specific proof.
         </p>
       </div>
 
@@ -89,7 +103,7 @@ export default async function AcademicIntelligencePage({ searchParams }: { searc
       </CardContent></Card>
 
       <Table><THead><TR><TH>Class</TH><TH>Section</TH><TH>Subject</TH><TH>Teacher</TH><TH>Expected</TH><TH>Actual</TH><TH>Lag Days</TH><TH>Status</TH><TH>Data Coverage</TH></TR></THead><TBody>
-        {rows.map((row, index) => (
+        {analytics.pageRows.map((row, index) => (
           <TR key={`${row.classId}-${row.sectionId}-${row.subjectId}-${index}`}>
             <TD>{row.className}</TD>
             <TD>{row.sectionName}</TD>
@@ -102,8 +116,23 @@ export default async function AcademicIntelligencePage({ searchParams }: { searc
             <TD>{row.dataCoverage.replace(/_/g, " ")}</TD>
           </TR>
         ))}
-        {!rows.length && <TR><TD colSpan={9} className="py-8 text-center text-slate-500">No teacher assignments match these filters, or no lesson plans have been logged yet.</TD></TR>}
+        {!analytics.pageRows.length && <TR><TD colSpan={9} className="py-8 text-center text-slate-500">No teacher assignments match these filters, or no lesson plans have been logged yet.</TD></TR>}
       </TBody></Table>
+      <div className="flex items-center justify-between text-sm text-slate-500">
+        <span>{analytics.totalCount} rows · page {analytics.page}</span>
+        <div className="flex gap-2">
+          {analytics.page > 1 && (
+            <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href={`?${pageHref(params, analytics.page - 1)}`}>
+              Previous
+            </Link>
+          )}
+          {analytics.page * analytics.pageSize < analytics.totalCount && (
+            <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href={`?${pageHref(params, analytics.page + 1)}`}>
+              Next
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

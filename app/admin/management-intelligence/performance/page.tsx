@@ -1,22 +1,31 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 import { getPerformanceIntelligence, listAcademicYears, listClassesAndSections } from "@/features/management-intelligence/service";
 import { MetricCard } from "@/features/management-intelligence/components/metric-card";
 import type { PerformanceTrendStatus } from "@/features/management-intelligence/types";
 
 type Params = {
   academic_year_id?: string;
+  term_id?: string;
   exam_id?: string;
   class_id?: string;
   section_id?: string;
   subject_id?: string;
   trend?: PerformanceTrendStatus;
   student_id?: string;
+  page?: string;
 };
+
+function pageHref(params: Record<string, string | undefined>, page: number): string {
+  const query = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])));
+  query.set("page", String(page));
+  return query.toString();
+}
 
 const TREND_BADGE: Record<PerformanceTrendStatus, string> = {
   STRONGLY_IMPROVING: "bg-emerald-100 text-emerald-700",
@@ -33,12 +42,14 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
   const [analytics, academicYears, academics] = await Promise.all([
     getPerformanceIntelligence(supabase, {
       academicYearId: params.academic_year_id,
+      termId: params.term_id,
       examId: params.exam_id,
       classId: params.class_id,
       sectionId: params.section_id,
       subjectId: params.subject_id,
       trend: params.trend,
       studentId: params.student_id,
+      page: Number(params.page ?? "1") || 1,
     }),
     listAcademicYears(supabase),
     listClassesAndSections(supabase),
@@ -91,6 +102,7 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
       <Card><CardContent>
         <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           <label className="text-xs font-medium text-slate-600">Academic year<select name="academic_year_id" defaultValue={analytics.academicYear?.id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm">{academicYears.map((item) => <option key={item.id} value={item.id}>{item.year_label}{item.is_current ? " (current)" : ""}</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-600">Term<select name="term_id" defaultValue={params.term_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All terms</option>{(analytics.terms ?? []).map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Exam<select name="exam_id" defaultValue={analytics.selectedExam?.id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm">{(analytics.exams ?? []).map((exam) => <option key={exam.id} value={exam.id}>{exam.name}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Class<select name="class_id" defaultValue={params.class_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All classes</option>{academics.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Section<select name="section_id" defaultValue={params.section_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All sections</option>{academics.sections.filter((s) => !params.class_id || s.class_id === params.class_id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
@@ -146,7 +158,7 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
       </Card>
 
       <Table><THead><TR><TH>Student</TH><TH>Class</TH><TH>Latest %</TH><TH>Previous %</TH><TH>Trend</TH><TH>Class Rank</TH><TH>Failed Subjects</TH></TR></THead><TBody>
-        {insights.map((s) => (
+        {analytics.pageInsights.map((s) => (
           <TR key={s.studentId} className={s.studentId === params.student_id ? "bg-blue-50" : undefined}>
             <TD><Link href={`/admin/students/${s.studentId}`} className="font-medium text-slate-900 hover:underline">{s.studentName}</Link><p className="text-xs text-slate-400">{s.admissionNo}</p></TD>
             <TD>{s.className} · {s.sectionName}</TD>
@@ -157,8 +169,15 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
             <TD>{s.failedSubjects.length ? s.failedSubjects.join(", ") : "—"}</TD>
           </TR>
         ))}
-        {!insights.length && <TR><TD colSpan={7} className="py-8 text-center text-slate-500">No students match these filters, or no published results exist yet.</TD></TR>}
+        {!analytics.pageInsights.length && <TR><TD colSpan={7} className="py-8 text-center text-slate-500">No students match these filters, or no published results exist yet.</TD></TR>}
       </TBody></Table>
+      <div className="flex items-center justify-between text-sm text-slate-500">
+        <span>{analytics.totalCount} students · page {analytics.page}{analytics.totalCount !== insights.length ? ` (ranked within ${insights.length} matching the current filters)` : ""}</span>
+        <div className="flex gap-2">
+          {analytics.page > 1 && <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href={`?${pageHref(params, analytics.page - 1)}`}>Previous</Link>}
+          {analytics.page * analytics.pageSize < analytics.totalCount && <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href={`?${pageHref(params, analytics.page + 1)}`}>Next</Link>}
+        </div>
+      </div>
     </div>
   );
 }

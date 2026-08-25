@@ -42,7 +42,7 @@ export async function listExams(supabase: SupabaseClient): Promise<Exam[]> {
 
 export async function insertExam(
   supabase: SupabaseClient,
-  input: Pick<Exam, "term_id" | "name" | "description">,
+  input: Pick<Exam, "term_id" | "name" | "description" | "comparison_group" | "sequence_no">,
 ): Promise<Exam> {
   const { data, error } = await supabase.from("exams").insert(input).select().single();
   if (error) throw error;

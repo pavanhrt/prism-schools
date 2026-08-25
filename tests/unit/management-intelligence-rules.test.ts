@@ -6,10 +6,13 @@ import {
   buildWorkingDays,
   calculateAttendance,
   computeCoverage,
+  computeDailyCoverage,
   computeHealthScore,
   consecutiveAbsenceDays,
   coverageStatus,
   denseRankByScore,
+  feeCollectionRateBelowThreshold,
+  feeCollectionRateRecovered,
   feeOverdueSeverity,
   healthLabel,
   isAlertTransitionAllowed,
@@ -154,6 +157,37 @@ describe("management intelligence phase 2: attendance coverage", () => {
   });
 });
 
+describe("management intelligence phase 2b: fee collection-rate warning", () => {
+  it("warns once collection percentage is below the threshold with real invoice data", () => {
+    expect(feeCollectionRateBelowThreshold("COMPLETE", 45, 60)).toBe(true);
+  });
+  it("does not warn at or above the threshold", () => {
+    expect(feeCollectionRateBelowThreshold("COMPLETE", 60, 60)).toBe(false);
+    expect(feeCollectionRateBelowThreshold("COMPLETE", 75, 60)).toBe(false);
+  });
+  it("never warns (or recovers) on missing fee data — NOT_RECORDED is not a 0% crisis", () => {
+    expect(feeCollectionRateBelowThreshold("NOT_RECORDED", null, 60)).toBe(false);
+    expect(feeCollectionRateRecovered("NOT_RECORDED", null, 60)).toBe(false);
+  });
+  it("recovers only once collection percentage is back at or above the threshold with real data", () => {
+    expect(feeCollectionRateRecovered("COMPLETE", 59.9, 60)).toBe(false);
+    expect(feeCollectionRateRecovered("COMPLETE", 60, 60)).toBe(true);
+    expect(feeCollectionRateRecovered("COMPLETE", 75, 60)).toBe(true);
+  });
+});
+
+describe("management intelligence phase 2b: non-working-day attendance coverage", () => {
+  it("does not raise a missing-attendance alarm on a non-working day", () => {
+    expect(computeDailyCoverage(200, 0, false)).toEqual({ activeCount: 200, recordedCount: 0, missingCount: 0, coveragePercentage: null, status: "NOT_EXPECTED" });
+  });
+  it("still reports NOT_EXPECTED even if some rows exist on a non-working day (e.g. a makeup session)", () => {
+    expect(computeDailyCoverage(200, 5, false).status).toBe("NOT_EXPECTED");
+  });
+  it("evaluates coverage normally on a working day", () => {
+    expect(computeDailyCoverage(200, 160, true)).toEqual({ activeCount: 200, recordedCount: 160, missingCount: 40, coveragePercentage: 80, status: "PARTIAL" });
+  });
+});
+
 describe("management intelligence phase 2: academic lag", () => {
   const days = ["2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"];
   it("computes zero lag for a plan not yet due", () => expect(workingDayLag("2026-08-28", "2026-08-28", days)).toBe(0));
@@ -195,35 +229,49 @@ describe("management intelligence phase 2: ranking and fee overdue detection", (
   });
 });
 
-describe("management intelligence phase 2: school health score", () => {
-  it("scores full coverage as a weighted average", () => {
+describe("management intelligence phase 2b: school health score (coverage-aware)", () => {
+  it("scores full coverage as a plain weighted average", () => {
     const result = computeHealthScore([
-      { key: "attendance", label: "Student Attendance", weight: 25, score: 90 },
-      { key: "academics", label: "Academic Progress", weight: 25, score: 80 },
-      { key: "performance", label: "Student Performance", weight: 25, score: 70 },
-      { key: "staff", label: "Staff Attendance", weight: 10, score: 95 },
-      { key: "delivery", label: "Timetable/Delivery", weight: 10, score: 60 },
-      { key: "fees", label: "Fee Collection", weight: 5, score: 100 },
+      { key: "attendance", label: "Student Attendance", weight: 25, score: 90, coveragePercentage: 100 },
+      { key: "academics", label: "Academic Progress", weight: 25, score: 80, coveragePercentage: 100 },
+      { key: "performance", label: "Student Performance", weight: 25, score: 70, coveragePercentage: 100 },
+      { key: "staff", label: "Staff Attendance", weight: 10, score: 95, coveragePercentage: 100 },
+      { key: "delivery", label: "Timetable/Delivery", weight: 10, score: 60, coveragePercentage: 100 },
+      { key: "fees", label: "Fee Collection", weight: 5, score: 100, coveragePercentage: 100 },
     ]);
     expect(result.score).toBeCloseTo(80.5, 2);
     expect(result.coveragePercentage).toBe(100);
     expect(result.unavailable).toEqual([]);
   });
-  it("re-normalizes weights and reports coverage when a component is missing, never scoring it as zero", () => {
+  it("re-normalizes weights and reports coverage when a component is entirely missing (0% coverage), never scoring it as zero", () => {
     const result = computeHealthScore([
-      { key: "attendance", label: "Student Attendance", weight: 25, score: 90 },
-      { key: "academics", label: "Academic Progress", weight: 25, score: 80 },
-      { key: "performance", label: "Student Performance", weight: 25, score: 70 },
-      { key: "staff", label: "Staff Attendance", weight: 10, score: 95 },
-      { key: "delivery", label: "Timetable/Delivery", weight: 10, score: null },
-      { key: "fees", label: "Fee Collection", weight: 5, score: 100 },
+      { key: "attendance", label: "Student Attendance", weight: 25, score: 90, coveragePercentage: 100 },
+      { key: "academics", label: "Academic Progress", weight: 25, score: 80, coveragePercentage: 100 },
+      { key: "performance", label: "Student Performance", weight: 25, score: 70, coveragePercentage: 100 },
+      { key: "staff", label: "Staff Attendance", weight: 10, score: 95, coveragePercentage: 100 },
+      { key: "delivery", label: "Timetable/Delivery", weight: 10, score: null, coveragePercentage: 0 },
+      { key: "fees", label: "Fee Collection", weight: 5, score: 100, coveragePercentage: 100 },
     ]);
     expect(result.unavailable).toEqual(["Timetable/Delivery"]);
     expect(result.coveragePercentage).toBe(90);
     expect(result.score).toBeCloseTo((90 * 25 + 80 * 25 + 70 * 25 + 95 * 10 + 100 * 5) / 90, 2);
   });
-  it("has no score when every component is missing", () => {
-    const result = computeHealthScore([{ key: "attendance", label: "Student Attendance", weight: 25, score: null }]);
+  it("scales a partially-covered component's effective weight instead of treating it as fully available", () => {
+    // 5 of 200 students evaluated: 2.5% coverage, not full weight.
+    const result = computeHealthScore([
+      { key: "attendance", label: "Student Attendance", weight: 50, score: 90, coveragePercentage: 100 },
+      { key: "performance", label: "Student Performance", weight: 50, score: 40, coveragePercentage: 2.5 },
+    ]);
+    const expectedEffective = { attendance: 50, performance: 50 * 0.025 };
+    const sumEffective = expectedEffective.attendance + expectedEffective.performance;
+    expect(result.score).toBeCloseTo((90 * expectedEffective.attendance + 40 * expectedEffective.performance) / sumEffective, 2);
+    expect(result.coveragePercentage).toBeCloseTo((sumEffective / 100) * 100, 2);
+    expect(result.unavailable).toEqual([]);
+    const performanceComponent = result.components.find((c) => c.key === "performance")!;
+    expect(performanceComponent.effectiveWeight).toBeCloseTo(1.25, 2);
+  });
+  it("has no score when every component has 0% coverage", () => {
+    const result = computeHealthScore([{ key: "attendance", label: "Student Attendance", weight: 25, score: null, coveragePercentage: 0 }]);
     expect(result.score).toBeNull();
     expect(result.coveragePercentage).toBe(0);
   });

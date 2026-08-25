@@ -4,16 +4,46 @@ import { denseRankByScore, performanceTrend } from "./rules";
 import type { CoverageStatus, StudentPerformanceInsight, SubjectPerformance } from "./types";
 
 /**
- * Comparable-exam logic (documented, per the requirement not to compare
- * unrelated exams blindly): a student's "latest" performance is their valid,
- * authoritative (published/locked) results in a single selected exam; their
- * "previous comparable" performance is their valid results in the most
- * recent earlier exam within the SAME academic year (ordered by exam
- * creation time, since exams have no explicit sequence number). A subject
- * trend additionally requires the SAME subject to appear in both exams.
- * A student with no valid result in the selected exam, or no earlier exam
- * with a valid result, is INSUFFICIENT_DATA — never a fabricated decline.
+ * Comparable-exam logic (Phase 2B — comparability is EXPLICIT, never
+ * inferred): a student's "latest" performance is their valid, authoritative
+ * (published/locked) results in a single selected exam. Their "previous
+ * comparable" performance exists ONLY if the selected exam has a non-null
+ * `comparison_group` and `sequence_no`, and an earlier exam shares that
+ * exact comparison_group with a strictly lower sequence_no —
+ * `selectPreviousComparableExam` below. created_at, exam name text, and
+ * term ordering are never used to infer comparability; an exam with no
+ * comparison_group can never be auto-compared to anything.
+ *
+ * A subject trend additionally requires the SAME subject to appear, with a
+ * valid result, in both exams. The overall trend additionally requires a
+ * consistent subject basis: both sides of the comparison are restricted to
+ * subjects with a valid result in BOTH exams (see summarizeStudentPerformance
+ * below) — a previous exam that also tested an extra subject never drags
+ * the comparison off a like-for-like basis.
+ *
+ * A student with no valid result in the selected exam, no comparable
+ * previous exam, or no common evaluated subject is INSUFFICIENT_DATA —
+ * never a fabricated decline.
  */
+
+export interface ComparableExamCandidate {
+  id: string;
+  comparisonGroup: string | null;
+  sequenceNo: number | null;
+}
+
+export function selectPreviousComparableExam<T extends ComparableExamCandidate>(selectedExam: T, candidates: T[]): T | null {
+  if (selectedExam.comparisonGroup === null || selectedExam.sequenceNo === null) return null;
+  const eligible = candidates.filter(
+    (exam) =>
+      exam.id !== selectedExam.id &&
+      exam.comparisonGroup === selectedExam.comparisonGroup &&
+      exam.sequenceNo !== null &&
+      exam.sequenceNo < selectedExam.sequenceNo!,
+  );
+  if (eligible.length === 0) return null;
+  return eligible.reduce((best, exam) => (exam.sequenceNo! > best.sequenceNo! ? exam : best));
+}
 
 export interface PerformanceResultRow {
   studentId: string;
@@ -117,21 +147,46 @@ export function summarizeStudentPerformance(params: {
 
       const latestPercentage = countPct > 0 ? Math.round((sumPct / countPct) * 100) / 100 : null;
 
+      // The overall trend must compare a consistent subject basis — never
+      // the current exam's full average against a previous average built
+      // from a different subject set (e.g. previous exam also tested
+      // Social, current exam didn't). Both sides of the trend comparison
+      // are restricted to the intersection of subjects with a valid,
+      // evaluated result in BOTH exams. `previousPercentage` below is that
+      // intersection-basis previous average — i.e. "Previous Comparable %".
+      // `latestPercentage` above stays the full current-exam average
+      // (informational, "how the student did this exam overall") and is
+      // never itself narrowed by comparability.
+      const evaluatedCurrentSubjectIds = new Set(rows.filter((row) => gradeOf(row) !== null).map((row) => row.subjectId));
+      const commonSubjectIds = new Set(
+        previousRows.filter((row) => gradeOf(row) !== null && evaluatedCurrentSubjectIds.has(row.subjectId)).map((row) => row.subjectId),
+      );
       let previousSum = 0;
       let previousCount = 0;
       for (const row of previousRows) {
+        if (!commonSubjectIds.has(row.subjectId)) continue;
         const grade = gradeOf(row);
         if (!grade) continue;
         previousSum += grade.percentage;
         previousCount += 1;
       }
+      let currentBasisSum = 0;
+      let currentBasisCount = 0;
+      for (const row of rows) {
+        if (!commonSubjectIds.has(row.subjectId)) continue;
+        const grade = gradeOf(row);
+        if (!grade) continue;
+        currentBasisSum += grade.percentage;
+        currentBasisCount += 1;
+      }
       const previousPercentage = previousCount > 0 ? Math.round((previousSum / previousCount) * 100) / 100 : null;
-      const overallTrend = performanceTrend(latestPercentage, previousPercentage, changePoints, strongChangePoints);
+      const currentPercentageForTrend = currentBasisCount > 0 ? Math.round((currentBasisSum / currentBasisCount) * 100) / 100 : null;
+      const overallTrend = performanceTrend(currentPercentageForTrend, previousPercentage, changePoints, strongChangePoints);
 
       const attentionReasons: string[] = [];
       if (overallTrend.status === "DECLINING" || overallTrend.status === "STRONGLY_DECLINING") {
         attentionReasons.push(
-          `Overall performance changed from ${previousPercentage}% to ${latestPercentage}% (${overallTrend.differencePoints} percentage points).`,
+          `Overall performance (on the subjects common to both exams) changed from ${previousPercentage}% to ${currentPercentageForTrend}% (${overallTrend.differencePoints} percentage points).`,
         );
       }
       if (failedSubjects.length > 0) {

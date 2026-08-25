@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeClassPerformance, summarizeStudentPerformance } from "@/features/management-intelligence/performance";
+import { selectPreviousComparableExam, summarizeClassPerformance, summarizeStudentPerformance } from "@/features/management-intelligence/performance";
 import type { GradeScale } from "@/types/exams";
 
 const gradeScales: GradeScale[] = [
@@ -110,6 +110,87 @@ describe("performance: exam comparability", () => {
     });
     const text = result.attentionReasons.join(" ") + result.subjectsRequiringAttention.map((r) => r.reason).join(" ");
     expect(text.toLowerCase()).not.toMatch(/weak|poor student|bad student|low student/);
+  });
+});
+
+describe("phase 2b: explicit exam comparability (never inferred)", () => {
+  it("has no previous exam when the selected exam has no comparison_group at all — unrelated exams are never compared", () => {
+    const result = selectPreviousComparableExam(
+      { id: "exam-2", comparisonGroup: null, sequenceNo: null },
+      [{ id: "exam-1", comparisonGroup: null, sequenceNo: null }],
+    );
+    expect(result).toBeNull();
+  });
+
+  it("has no previous exam when candidates share no comparison_group, even with a plausible sequence", () => {
+    const result = selectPreviousComparableExam(
+      { id: "exam-2", comparisonGroup: "Term Exams", sequenceNo: 2 },
+      [{ id: "exam-1", comparisonGroup: "Unit Tests", sequenceNo: 1 }],
+    );
+    expect(result).toBeNull();
+  });
+
+  it("selects the explicitly comparable exam with the highest lower sequence_no in the same group", () => {
+    const result = selectPreviousComparableExam(
+      { id: "exam-3", comparisonGroup: "Term Exams", sequenceNo: 3 },
+      [
+        { id: "exam-1", comparisonGroup: "Term Exams", sequenceNo: 1 },
+        { id: "exam-2", comparisonGroup: "Term Exams", sequenceNo: 2 },
+        { id: "exam-unrelated", comparisonGroup: "Unit Tests", sequenceNo: 2 },
+      ],
+    );
+    expect(result?.id).toBe("exam-2");
+  });
+
+  it("never selects an exam at or after the same sequence_no as the selected exam", () => {
+    const result = selectPreviousComparableExam(
+      { id: "exam-2", comparisonGroup: "Term Exams", sequenceNo: 2 },
+      [
+        { id: "exam-2-dup", comparisonGroup: "Term Exams", sequenceNo: 2 },
+        { id: "exam-3", comparisonGroup: "Term Exams", sequenceNo: 3 },
+      ],
+    );
+    expect(result).toBeNull();
+  });
+});
+
+describe("phase 2b: consistent subject-basis overall trend", () => {
+  it("restricts the previous-comparable average to subjects also present in the current exam", () => {
+    const [result] = summarizeStudentPerformance({
+      roster: [roster[0]],
+      selectedExamId: "exam-2",
+      selectedExamName: "Term 2",
+      // current exam: only Math and Science
+      selectedExamResults: [subjectRow("s1", 80, "math"), subjectRow("s1", 60, "science")],
+      // previous exam: Math, Science, AND Social (an extra subject not retested)
+      previousExamResults: [subjectRow("s1", 70, "math"), subjectRow("s1", 50, "science"), subjectRow("s1", 90, "social")],
+      gradeScales,
+      changePoints: 3,
+      strongChangePoints: 10,
+      attentionScorePct: 40,
+    });
+    // previousPercentage must average only Math+Science (60), never include Social (90)
+    expect(result.previousPercentage).toBe(60);
+    // latestPercentage stays the full current-exam average (Math+Science = 70) — informational, not narrowed
+    expect(result.latestPercentage).toBe(70);
+    expect(result.differencePoints).toBe(10);
+    expect(result.trend).toBe("STRONGLY_IMPROVING");
+  });
+
+  it("is INSUFFICIENT_DATA when no subject is common to both exams", () => {
+    const [result] = summarizeStudentPerformance({
+      roster: [roster[0]],
+      selectedExamId: "exam-2",
+      selectedExamName: "Term 2",
+      selectedExamResults: [subjectRow("s1", 80, "math")],
+      previousExamResults: [subjectRow("s1", 90, "social")],
+      gradeScales,
+      changePoints: 3,
+      strongChangePoints: 10,
+      attentionScorePct: 40,
+    });
+    expect(result.previousPercentage).toBeNull();
+    expect(result.trend).toBe("INSUFFICIENT_DATA");
   });
 });
 
