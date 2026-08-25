@@ -15,6 +15,7 @@ export const listExamSchedules = repo.listExamSchedules;
 export const getExamSchedule = repo.getExamSchedule;
 export const listResultsForSchedule = repo.listResultsForSchedule;
 export const listResultsForStudent = repo.listResultsForStudent;
+export const listResultsForSchedules = repo.listResultsForSchedules;
 export const listAuditForResult = repo.listAuditForResult;
 export const listGradeScales = repo.listGradeScales;
 export const deleteGradeScale = repo.deleteGradeScale;

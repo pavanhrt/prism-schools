@@ -3,8 +3,12 @@ import { hasPermission } from "@/lib/permissions";
 
 const ITEMS = [
   ["/admin/management-intelligence", "Overview"],
-  ["/admin/management-intelligence/attendance", "Attendance Intelligence"],
+  ["/admin/management-intelligence/attendance", "Attendance"],
+  ["/admin/management-intelligence/academics", "Academics"],
+  ["/admin/management-intelligence/performance", "Performance"],
+  ["/admin/management-intelligence/fees", "Fees"],
   ["/admin/management-intelligence/alerts", "Alert Center"],
+  ["/admin/management-intelligence/reviews", "Reviews"],
   ["/admin/management-intelligence/settings", "Settings"],
 ] as const;
 

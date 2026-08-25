@@ -2,6 +2,12 @@ import type {
   AlertSeverity,
   AttendanceMetric,
   CalendarOverride,
+  CoverageMetric,
+  CoverageStatus,
+  DeliveryStatus,
+  HealthComponentInput,
+  HealthScoreResult,
+  PerformanceTrendResult,
   TrendStatus,
 } from "./types";
 
@@ -165,4 +171,135 @@ export function isAlertTransitionAllowed(
   if (currentStatus === "OPEN") return true;
   if (currentStatus === "ACKNOWLEDGED") return nextStatus === "RESOLVED" || nextStatus === "DISMISSED";
   return false;
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: data-quality coverage. Zero recorded rows is NOT_RECORDED, never a
+// 0% coverage reading, so an empty dashboard never gets misread as "complete".
+// -----------------------------------------------------------------------------
+export function coverageStatus(recordedCount: number, percentage: number | null): CoverageStatus {
+  if (recordedCount === 0 || percentage === null) return "NOT_RECORDED";
+  if (percentage >= 95) return "COMPLETE";
+  if (percentage >= 80) return "PARTIAL";
+  return "INCOMPLETE";
+}
+
+export function computeCoverage(activeCount: number, recordedCount: number): CoverageMetric {
+  const missingCount = Math.max(activeCount - recordedCount, 0);
+  const coveragePercentage = activeCount > 0 ? Math.round((recordedCount / activeCount) * 10_000) / 100 : null;
+  return {
+    activeCount,
+    recordedCount,
+    missingCount,
+    coveragePercentage,
+    status: coverageStatus(recordedCount, coveragePercentage),
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: academic delivery lag. Lag is only ever computed from an actual
+// overdue lesson plan (planned_date in the past, not completed); with no such
+// plan there is nothing objective to lag behind, so the result is
+// INSUFFICIENT_DATA rather than a fabricated zero.
+// -----------------------------------------------------------------------------
+export function workingDayLag(planDate: string, asOfDate: string, workingDays: string[]): number {
+  if (planDate >= asOfDate) return 0;
+  return workingDays.filter((date) => date > planDate && date <= asOfDate).length;
+}
+
+export function academicLagStatus(
+  lagDays: number | null,
+  slightlyBehindMinDays: number,
+  warningMinDays: number,
+  criticalMinDays: number,
+): DeliveryStatus {
+  if (lagDays === null) return "INSUFFICIENT_DATA";
+  if (lagDays >= criticalMinDays) return "CRITICAL";
+  if (lagDays >= warningMinDays) return "WARNING";
+  if (lagDays >= slightlyBehindMinDays) return "SLIGHTLY_BEHIND";
+  return "ON_TRACK";
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: performance trend. Symmetric point thresholds around a stable band;
+// no prior comparable result is INSUFFICIENT_DATA, never treated as decline.
+// -----------------------------------------------------------------------------
+export function performanceTrend(
+  current: number | null,
+  previous: number | null,
+  changePoints: number,
+  strongChangePoints: number,
+): PerformanceTrendResult {
+  if (current === null || previous === null) return { differencePoints: null, status: "INSUFFICIENT_DATA" };
+  const differencePoints = Math.round((current - previous) * 100) / 100;
+  if (differencePoints >= strongChangePoints) return { differencePoints, status: "STRONGLY_IMPROVING" };
+  if (differencePoints >= changePoints) return { differencePoints, status: "IMPROVING" };
+  if (differencePoints <= -strongChangePoints) return { differencePoints, status: "STRONGLY_DECLINING" };
+  if (differencePoints <= -changePoints) return { differencePoints, status: "DECLINING" };
+  return { differencePoints, status: "STABLE" };
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: dense ranking (ties share a rank, no gap after them) for class and
+// subject leaderboards, applied to an array of scores in roster order.
+// -----------------------------------------------------------------------------
+export function denseRankByScore(scores: number[]): number[] {
+  const sorted = [...new Set(scores)].sort((a, b) => b - a);
+  const rankByScore = new Map(sorted.map((score, index) => [score, index + 1]));
+  return scores.map((score) => rankByScore.get(score)!);
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: fee overdue severity, driven by configured day thresholds.
+// -----------------------------------------------------------------------------
+export function feeOverdueSeverity(
+  overdueDays: number | null,
+  warningDays: number,
+  criticalDays: number,
+): AlertSeverity | null {
+  if (overdueDays === null || overdueDays <= 0) return null;
+  if (overdueDays >= criticalDays) return "CRITICAL";
+  if (overdueDays >= warningDays) return "WARNING";
+  return null;
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: School Health Score. Missing components are excluded and the
+// remaining weights are re-normalized, rather than scoring a missing
+// component as zero (which would unfairly punish the school for a data gap).
+// -----------------------------------------------------------------------------
+export function computeHealthScore(components: HealthComponentInput[]): HealthScoreResult {
+  const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
+  const available = components.filter((component) => component.score !== null);
+  const availableWeight = available.reduce((sum, component) => sum + component.weight, 0);
+  const unavailable = components.filter((component) => component.score === null).map((component) => component.label);
+  const score =
+    availableWeight > 0
+      ? Math.round(
+          (available.reduce((sum, component) => sum + component.score! * component.weight, 0) / availableWeight) * 100,
+        ) / 100
+      : null;
+  const coveragePercentage = totalWeight > 0 ? Math.round((availableWeight / totalWeight) * 10_000) / 100 : 0;
+  return {
+    score,
+    coveragePercentage,
+    unavailable,
+    components: components.map((component) => ({
+      key: component.key,
+      label: component.label,
+      weight: component.weight,
+      score: component.score,
+      available: component.score !== null,
+    })),
+  };
+}
+
+export type HealthLabel = "Excellent" | "Good" | "Attention Needed" | "Critical Attention" | "Not Available";
+
+export function healthLabel(score: number | null): HealthLabel {
+  if (score === null) return "Not Available";
+  if (score >= 90) return "Excellent";
+  if (score >= 75) return "Good";
+  if (score >= 60) return "Attention Needed";
+  return "Critical Attention";
 }

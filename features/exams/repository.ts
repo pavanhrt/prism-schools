@@ -135,6 +135,22 @@ export async function listResultsForStudent(
   return data;
 }
 
+/** Batched read across many schedules at once — used by Management
+ * Intelligence to assemble performance analytics for a whole academic year
+ * without querying exam_results per student. */
+export async function listResultsForSchedules(
+  supabase: SupabaseClient,
+  examScheduleIds: string[],
+): Promise<ExamResult[]> {
+  if (examScheduleIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("exam_results")
+    .select("*")
+    .in("exam_schedule_id", examScheduleIds);
+  if (error) throw error;
+  return data;
+}
+
 export type ResultUpsert = Pick<
   ExamResult,
   "exam_schedule_id" | "student_id" | "marks_theory" | "marks_practical" | "attendance_status"

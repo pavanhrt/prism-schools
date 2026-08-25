@@ -264,6 +264,23 @@ export async function getAlertSummary(supabase: SupabaseClient, periodStart: str
   };
 }
 
+/** Newly-detected alerts within a period — distinct from getAlertSummary's
+ * "open right now" and "resolved in period" counts, for the Weekly Review's
+ * New Alerts card. */
+export async function countAlertsFirstDetected(
+  supabase: SupabaseClient,
+  periodStart: string,
+  periodEnd: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("management_alerts")
+    .select("id", { count: "exact", head: true })
+    .gte("first_detected_at", `${periodStart}T00:00:00.000Z`)
+    .lte("first_detected_at", `${periodEnd}T23:59:59.999Z`);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getAlert(supabase: SupabaseClient, id: string): Promise<ManagementAlert | null> {
   const { data, error } = await supabase.from("management_alerts").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
@@ -287,6 +304,24 @@ export async function listActiveAttendanceAlerts(supabase: SupabaseClient, acade
   if (error) throw error;
   return (data ?? []) as ManagementAlert[];
 }
+
+async function listActiveAlertsByCategory(supabase: SupabaseClient, academicYearId: string, category: string) {
+  const { data, error } = await supabase
+    .from("management_alerts")
+    .select("*")
+    .eq("academic_year_id", academicYearId)
+    .eq("category", category)
+    .in("status", ["OPEN", "ACKNOWLEDGED"]);
+  if (error) throw error;
+  return (data ?? []) as ManagementAlert[];
+}
+
+export const listActiveAcademicAlerts = (supabase: SupabaseClient, academicYearId: string) =>
+  listActiveAlertsByCategory(supabase, academicYearId, "ACADEMICS");
+export const listActivePerformanceAlerts = (supabase: SupabaseClient, academicYearId: string) =>
+  listActiveAlertsByCategory(supabase, academicYearId, "PERFORMANCE");
+export const listActiveFeeAlerts = (supabase: SupabaseClient, academicYearId: string) =>
+  listActiveAlertsByCategory(supabase, academicYearId, "FEES");
 
 export async function upsertAlert(supabase: SupabaseClient, value: Record<string, unknown>) {
   const { data, error } = await supabase

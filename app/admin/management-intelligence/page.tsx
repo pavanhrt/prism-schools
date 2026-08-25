@@ -4,18 +4,19 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions";
 import { MetricCard } from "@/features/management-intelligence/components/metric-card";
-import { RefreshAlertsButton } from "@/features/management-intelligence/components/refresh-alerts-button";
-import { alertDestination, getManagementOverview, listAlerts } from "@/features/management-intelligence/service";
+import { RefreshAllAlertsButton } from "@/features/management-intelligence/components/refresh-all-alerts-button";
+import { alertDestination, getManagementOverview, getSchoolHealthScore, listAlerts } from "@/features/management-intelligence/service";
 
 function displayMetric(metric: { value: number | null; dataAvailable: boolean }, suffix = "") {
   return metric.dataAvailable && metric.value !== null ? `${metric.value}${suffix}` : "Not recorded";
 }
 export default async function ManagementIntelligencePage() {
   const supabase = await createClient();
-  const [overview, alerts, canManageAlerts] = await Promise.all([
+  const [overview, alerts, canManageAlerts, health] = await Promise.all([
     getManagementOverview(supabase),
     listAlerts(supabase, { statuses: ["OPEN", "ACKNOWLEDGED"], pageSize: 12 }),
     hasPermission("management_intelligence.manage_alerts"),
+    getSchoolHealthScore(supabase),
   ]);
   const severityGroups = ["CRITICAL", "WARNING", "INFO"] as const;
 
@@ -27,7 +28,7 @@ export default async function ManagementIntelligencePage() {
           <p className="text-sm text-slate-500">Operational visibility across PRISM Schools</p>
           <p className="mt-1 text-xs text-slate-400">Period: {overview.periodStart} to {overview.periodEnd}{overview.academicYearLabel ? ` · FY ${overview.academicYearLabel}` : ""}</p>
         </div>
-        {canManageAlerts && <RefreshAlertsButton />}
+        {canManageAlerts && <RefreshAllAlertsButton />}
       </div>
 
       {overview.evaluationMessage && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{overview.evaluationMessage}</div>}
@@ -35,11 +36,19 @@ export default async function ManagementIntelligencePage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-slate-900">School Status</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="School Health Score" value="Not configured" note="Health Score available after analytics configuration" />
+          <MetricCard
+            label="School Health Score"
+            value={health.score === null ? "Insufficient Data" : `${health.score} · ${health.label}`}
+            note={`Coverage ${health.coveragePercentage}%${health.unavailable.length ? ` · Unavailable: ${health.unavailable.join(", ")}` : ""}`}
+          />
           <MetricCard label="Open Critical Alerts" value={overview.schoolStatus.openCritical} />
           <MetricCard label="Open Warnings" value={overview.schoolStatus.openWarnings} />
           <MetricCard label="Resolved This Period" value={overview.schoolStatus.resolvedThisPeriod} />
         </div>
+        <p className="text-xs text-slate-400">
+          The School Health Score is an operational management indicator based on available school data. It is not an objective measure of
+          educational quality.
+        </p>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -49,11 +58,13 @@ export default async function ManagementIntelligencePage() {
           <MetricCard label="Present Today" value={displayMetric(overview.students.presentToday)} note="Headcount: present, late, or half-day" />
           <MetricCard label="Absent Today" value={displayMetric(overview.students.absentToday)} />
           <MetricCard label="Today's Attendance" value={displayMetric(overview.students.attendanceTodayPercentage, "%")} note="Weighted: half-day counts as 0.5" />
+          <MetricCard label="Attendance Coverage" value={`${overview.students.coverageToday.recordedCount}/${overview.students.coverageToday.activeCount}`} note={`${overview.students.coverageToday.status.replace(/_/g, " ")}${overview.students.coverageToday.coveragePercentage !== null ? ` · ${overview.students.coverageToday.coveragePercentage}%` : ""}`} />
           <MetricCard label="Absent 3+ Days" value={overview.students.absentWarning} />
           <MetricCard label="Absent 5+ Days" value={overview.students.absentCritical} />
           <MetricCard label="Below 75%" value={overview.students.belowWarning} />
           <MetricCard label="Below 65%" value={overview.students.belowCritical} />
         </div>
+        <p className="text-xs text-slate-400">Attendance percentage uses recorded attendance only. Coverage shows how much of today&apos;s attendance has been entered.</p>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -63,7 +74,17 @@ export default async function ManagementIntelligencePage() {
           <MetricCard label="Present Today" value={displayMetric(overview.staff.presentToday)} />
           <MetricCard label="Absent Today" value={displayMetric(overview.staff.absentToday)} />
           <MetricCard label="Period Attendance" value={displayMetric(overview.staff.attendancePercentage, "%")} />
+          <MetricCard label="Staff Coverage" value={`${overview.staff.coverageToday.recordedCount}/${overview.staff.coverageToday.activeCount}`} note={`${overview.staff.coverageToday.status.replace(/_/g, " ")}${overview.staff.coverageToday.coveragePercentage !== null ? ` · ${overview.staff.coverageToday.coveragePercentage}%` : ""}`} />
           <MetricCard label="Absent 3+ Days" value={overview.staff.absentWarning} />
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-slate-900">Academics · Performance · Fees</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Link href="/admin/management-intelligence/academics"><MetricCard label="Academic Progress" value="View details" note="Delivery lag by class and subject" /></Link>
+          <Link href="/admin/management-intelligence/performance"><MetricCard label="Student Performance" value="View details" note="Trends, rankings, and requires-attention" /></Link>
+          <Link href="/admin/management-intelligence/fees"><MetricCard label="Fee Collection" value="View details" note="Outstanding and overdue balances" /></Link>
         </div>
       </section>
 

@@ -21,8 +21,24 @@ const settingSchema = z.object({
     "student_low_attendance_critical_pct",
     "student_attendance_decline_points",
     "staff_absence_warning_days",
+    "academic_lag_slightly_behind_days",
+    "academic_lag_warning_days",
+    "academic_lag_critical_days",
+    "performance_change_points",
+    "performance_strong_change_points",
+    "performance_attention_score_pct",
+    "fee_overdue_warning_days",
+    "fee_overdue_critical_days",
+    "fee_significant_overdue_amount",
+    "fee_collection_rate_warning_pct",
+    "health_weight_student_attendance",
+    "health_weight_academic_progress",
+    "health_weight_performance",
+    "health_weight_staff_attendance",
+    "health_weight_delivery",
+    "health_weight_fees",
   ]),
-  numericValue: z.coerce.number().finite().min(0).max(1000),
+  numericValue: z.coerce.number().finite().min(0).max(100_000),
 });
 
 export async function updateSettingAction(input: z.input<typeof settingSchema>): Promise<ActionResult> {
@@ -50,6 +66,21 @@ export async function refreshAttendanceAlertsAction(): Promise<ActionResult> {
     };
   } catch (error) {
     return failure(error, "Could not refresh attendance alerts.");
+  }
+}
+
+export async function refreshAllAlertsAction(): Promise<ActionResult> {
+  try {
+    await requirePermission("management_intelligence.manage_alerts");
+    const supabase = await createClient();
+    const result = await service.refreshAllAlerts(supabase);
+    revalidatePath("/admin/management-intelligence", "layout");
+    return {
+      ok: true,
+      message: `Refresh complete across attendance, academics, performance, and fees: ${result.created} created, ${result.updated} updated, ${result.reopened} reopened, ${result.resolved} resolved.`,
+    };
+  } catch (error) {
+    return failure(error, "Could not refresh management alerts.");
   }
 }
 

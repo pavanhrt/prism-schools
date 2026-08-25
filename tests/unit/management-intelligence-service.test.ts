@@ -67,4 +67,20 @@ describe("alert drill-down routing", () => {
     expect(alertDestination({ student_id: null, staff_id: "staff-1" })).toBe("/admin/staff/staff-1");
     expect(alertDestination({ student_id: null, staff_id: null })).toBe("/admin/management-intelligence/alerts");
   });
+
+  it("routes performance alerts to the performance dashboard filtered by student", () => {
+    expect(alertDestination({ student_id: "student-1", staff_id: null, category: "PERFORMANCE" })).toBe(
+      "/admin/management-intelligence/performance?student_id=student-1",
+    );
+  });
+
+  it("routes fee alerts to the student record", () => {
+    expect(alertDestination({ student_id: "student-1", staff_id: null, category: "FEES" })).toBe("/admin/students/student-1");
+  });
+
+  it("routes academic alerts to the academics dashboard filtered by class/section/subject", () => {
+    expect(
+      alertDestination({ student_id: null, staff_id: null, category: "ACADEMICS", class_id: "class-1", section_id: "section-1", subject_id: "subject-1" }),
+    ).toBe("/admin/management-intelligence/academics?class_id=class-1&section_id=section-1&subject_id=subject-1");
+  });
 });

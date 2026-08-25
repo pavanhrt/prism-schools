@@ -119,6 +119,143 @@ export interface OverviewMetric {
   dataAvailable: boolean;
 }
 
+// -----------------------------------------------------------------------------
+// Phase 2
+// -----------------------------------------------------------------------------
+export type CoverageStatus = "COMPLETE" | "PARTIAL" | "INCOMPLETE" | "NOT_RECORDED";
+
+export interface CoverageMetric {
+  activeCount: number;
+  recordedCount: number;
+  missingCount: number;
+  coveragePercentage: number | null;
+  status: CoverageStatus;
+}
+
+export type DeliveryStatus = "ON_TRACK" | "SLIGHTLY_BEHIND" | "WARNING" | "CRITICAL" | "INSUFFICIENT_DATA";
+
+export interface SubjectDeliveryInsight {
+  classId: string;
+  className: string;
+  subjectId: string;
+  subjectName: string;
+  teacherId: string | null;
+  teacherName: string | null;
+  sectionId: string | null;
+  sectionName: string | null;
+  scheduledSessions: number;
+  evidencedSessions: number;
+  notRecordedSessions: number;
+  evidenceCoveragePercentage: number | null;
+  expectedProgress: number;
+  actualProgress: number;
+  pendingTopics: number;
+  lagDays: number | null;
+  status: DeliveryStatus;
+  dataCoverage: CoverageStatus;
+}
+
+export type PerformanceTrendStatus =
+  | "STRONGLY_IMPROVING"
+  | "IMPROVING"
+  | "STABLE"
+  | "DECLINING"
+  | "STRONGLY_DECLINING"
+  | "INSUFFICIENT_DATA";
+
+export interface PerformanceTrendResult {
+  differencePoints: number | null;
+  status: PerformanceTrendStatus;
+}
+
+export interface SubjectPerformance {
+  subjectId: string;
+  subjectName: string;
+  percentage: number | null;
+  isPass: boolean | null;
+  trend: PerformanceTrendResult;
+}
+
+export interface StudentPerformanceInsight {
+  studentId: string;
+  admissionNo: string;
+  studentName: string;
+  classId: string;
+  className: string;
+  sectionId: string;
+  sectionName: string;
+  latestExamId: string | null;
+  latestExamName: string | null;
+  latestPercentage: number | null;
+  previousPercentage: number | null;
+  differencePoints: number | null;
+  trend: PerformanceTrendStatus;
+  subjects: SubjectPerformance[];
+  failedSubjects: string[];
+  subjectsRequiringAttention: { subjectName: string; reason: string }[];
+  classRank: number | null;
+  dataCoverage: CoverageStatus;
+  requiresAttention: boolean;
+  attentionReasons: string[];
+}
+
+export interface ClassPerformanceSummary {
+  classId: string;
+  className: string;
+  sectionId: string;
+  sectionName: string;
+  studentsAssessed: number;
+  average: number | null;
+  highest: number | null;
+  lowest: number | null;
+  median: number | null;
+  passPercentage: number | null;
+}
+
+export interface HealthComponentInput {
+  key: string;
+  label: string;
+  weight: number;
+  score: number | null;
+}
+
+export interface HealthComponentResult extends HealthComponentInput {
+  available: boolean;
+}
+
+export interface HealthScoreResult {
+  score: number | null;
+  coveragePercentage: number;
+  unavailable: string[];
+  components: HealthComponentResult[];
+}
+
+export interface FeeSummary {
+  totalInvoiced: number;
+  totalCollected: number;
+  outstanding: number;
+  collectionPercentage: number | null;
+  overdueAmount: number;
+  studentsWithOutstanding: number;
+  studentsWithOverdue: number;
+  invoiceCount: number;
+  dataCoverage: CoverageStatus;
+}
+
+export interface OverdueStudentRow {
+  studentId: string;
+  admissionNo: string;
+  studentName: string;
+  className: string;
+  sectionName: string;
+  invoiceId: string;
+  invoiceNo: string;
+  dueDate: string;
+  overdueDays: number;
+  balance: number;
+  severity: AlertSeverity;
+}
+
 export interface ManagementOverview {
   periodStart: string;
   periodEnd: string;
@@ -138,6 +275,7 @@ export interface ManagementOverview {
     absentCritical: number;
     belowWarning: number;
     belowCritical: number;
+    coverageToday: CoverageMetric;
   };
   staff: {
     active: number;
@@ -145,6 +283,7 @@ export interface ManagementOverview {
     absentToday: OverviewMetric;
     attendancePercentage: OverviewMetric;
     absentWarning: number;
+    coverageToday: CoverageMetric;
   };
   evaluationMessage: string | null;
 }

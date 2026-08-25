@@ -1,16 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  academicLagStatus,
   alertRefreshDecision,
   attendanceTrend,
   buildWorkingDays,
   calculateAttendance,
+  computeCoverage,
+  computeHealthScore,
   consecutiveAbsenceDays,
+  coverageStatus,
+  denseRankByScore,
+  feeOverdueSeverity,
+  healthLabel,
   isAlertTransitionAllowed,
   latestRecordedAttendanceEvaluation,
   lowAttendanceSeverity,
   newestWorkingDayEvaluation,
+  performanceTrend,
   shouldAutoResolveAlert,
   studentAbsenceSeverity,
+  workingDayLag,
 } from "@/features/management-intelligence/rules";
 
 describe("management intelligence absence correctness", () => {
@@ -124,5 +133,108 @@ describe("management alert lifecycle rules", () => {
     expect(shouldAutoResolveAlert(true, false)).toBe(true);
     expect(shouldAutoResolveAlert(true, true)).toBe(false);
     expect(shouldAutoResolveAlert(false, false)).toBe(false);
+  });
+});
+
+describe("management intelligence phase 2: attendance coverage", () => {
+  it("is NOT_RECORDED at zero rows, never read as 0%", () => {
+    expect(computeCoverage(200, 0)).toEqual({ activeCount: 200, recordedCount: 0, missingCount: 200, coveragePercentage: 0, status: "NOT_RECORDED" });
+  });
+  it("is COMPLETE at 95% and above", () => {
+    expect(coverageStatus(190, 95)).toBe("COMPLETE");
+    expect(computeCoverage(200, 190).status).toBe("COMPLETE");
+  });
+  it("is PARTIAL between 80% and 94.99%", () => {
+    expect(coverageStatus(160, 80)).toBe("PARTIAL");
+    expect(computeCoverage(200, 160)).toEqual({ activeCount: 200, recordedCount: 160, missingCount: 40, coveragePercentage: 80, status: "PARTIAL" });
+  });
+  it("is INCOMPLETE below 80%", () => expect(coverageStatus(100, 50)).toBe("INCOMPLETE"));
+  it("has no denominator when there are no active students", () => {
+    expect(computeCoverage(0, 0)).toEqual({ activeCount: 0, recordedCount: 0, missingCount: 0, coveragePercentage: null, status: "NOT_RECORDED" });
+  });
+});
+
+describe("management intelligence phase 2: academic lag", () => {
+  const days = ["2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"];
+  it("computes zero lag for a plan not yet due", () => expect(workingDayLag("2026-08-28", "2026-08-28", days)).toBe(0));
+  it("counts only working days strictly after the plan date", () => expect(workingDayLag("2026-08-19", "2026-08-24", days)).toBe(3));
+  it("is ON_TRACK at 0 days", () => expect(academicLagStatus(0, 1, 4, 8)).toBe("ON_TRACK"));
+  it("is SLIGHTLY_BEHIND at 1 and 3 days", () => {
+    expect(academicLagStatus(1, 1, 4, 8)).toBe("SLIGHTLY_BEHIND");
+    expect(academicLagStatus(3, 1, 4, 8)).toBe("SLIGHTLY_BEHIND");
+  });
+  it("is WARNING at 4 and 7 days", () => {
+    expect(academicLagStatus(4, 1, 4, 8)).toBe("WARNING");
+    expect(academicLagStatus(7, 1, 4, 8)).toBe("WARNING");
+  });
+  it("is CRITICAL at 8 days and beyond", () => expect(academicLagStatus(8, 1, 4, 8)).toBe("CRITICAL"));
+  it("is INSUFFICIENT_DATA when there is no overdue plan to evaluate", () => expect(academicLagStatus(null, 1, 4, 8)).toBe("INSUFFICIENT_DATA"));
+});
+
+describe("management intelligence phase 2: performance trend", () => {
+  it("is STRONGLY_IMPROVING at +10 or more", () => expect(performanceTrend(85, 75, 3, 10).status).toBe("STRONGLY_IMPROVING"));
+  it("is IMPROVING at +3", () => expect(performanceTrend(78, 75, 3, 10).status).toBe("IMPROVING"));
+  it("is STABLE at 0", () => expect(performanceTrend(75, 75, 3, 10)).toEqual({ differencePoints: 0, status: "STABLE" }));
+  it("is DECLINING at -3", () => expect(performanceTrend(72, 75, 3, 10).status).toBe("DECLINING"));
+  it("is STRONGLY_DECLINING at -10 or beyond", () => expect(performanceTrend(61, 75, 3, 10).status).toBe("STRONGLY_DECLINING"));
+  it("is INSUFFICIENT_DATA with no comparable previous result", () => expect(performanceTrend(85, null, 3, 10)).toEqual({ differencePoints: null, status: "INSUFFICIENT_DATA" }));
+});
+
+describe("management intelligence phase 2: ranking and fee overdue detection", () => {
+  it("dense-ranks tied scores without gaps", () => expect(denseRankByScore([95, 95, 92, 88])).toEqual([1, 1, 2, 3]));
+  it("dense-ranks a fully-tied set as rank 1 throughout", () => expect(denseRankByScore([70, 70, 70])).toEqual([1, 1, 1]));
+  it("preserves input order while ranking", () => expect(denseRankByScore([60, 90, 90, 75])).toEqual([3, 1, 1, 2]));
+  it("has no severity for a not-yet-due or absent balance", () => {
+    expect(feeOverdueSeverity(0, 7, 30)).toBeNull();
+    expect(feeOverdueSeverity(null, 7, 30)).toBeNull();
+  });
+  it("warns and escalates at the configured overdue-day thresholds", () => {
+    expect(feeOverdueSeverity(7, 7, 30)).toBe("WARNING");
+    expect(feeOverdueSeverity(29, 7, 30)).toBe("WARNING");
+    expect(feeOverdueSeverity(30, 7, 30)).toBe("CRITICAL");
+  });
+});
+
+describe("management intelligence phase 2: school health score", () => {
+  it("scores full coverage as a weighted average", () => {
+    const result = computeHealthScore([
+      { key: "attendance", label: "Student Attendance", weight: 25, score: 90 },
+      { key: "academics", label: "Academic Progress", weight: 25, score: 80 },
+      { key: "performance", label: "Student Performance", weight: 25, score: 70 },
+      { key: "staff", label: "Staff Attendance", weight: 10, score: 95 },
+      { key: "delivery", label: "Timetable/Delivery", weight: 10, score: 60 },
+      { key: "fees", label: "Fee Collection", weight: 5, score: 100 },
+    ]);
+    expect(result.score).toBeCloseTo(80.5, 2);
+    expect(result.coveragePercentage).toBe(100);
+    expect(result.unavailable).toEqual([]);
+  });
+  it("re-normalizes weights and reports coverage when a component is missing, never scoring it as zero", () => {
+    const result = computeHealthScore([
+      { key: "attendance", label: "Student Attendance", weight: 25, score: 90 },
+      { key: "academics", label: "Academic Progress", weight: 25, score: 80 },
+      { key: "performance", label: "Student Performance", weight: 25, score: 70 },
+      { key: "staff", label: "Staff Attendance", weight: 10, score: 95 },
+      { key: "delivery", label: "Timetable/Delivery", weight: 10, score: null },
+      { key: "fees", label: "Fee Collection", weight: 5, score: 100 },
+    ]);
+    expect(result.unavailable).toEqual(["Timetable/Delivery"]);
+    expect(result.coveragePercentage).toBe(90);
+    expect(result.score).toBeCloseTo((90 * 25 + 80 * 25 + 70 * 25 + 95 * 10 + 100 * 5) / 90, 2);
+  });
+  it("has no score when every component is missing", () => {
+    const result = computeHealthScore([{ key: "attendance", label: "Student Attendance", weight: 25, score: null }]);
+    expect(result.score).toBeNull();
+    expect(result.coveragePercentage).toBe(0);
+  });
+  it("labels score bands", () => {
+    expect(healthLabel(95)).toBe("Excellent");
+    expect(healthLabel(90)).toBe("Excellent");
+    expect(healthLabel(89.9)).toBe("Good");
+    expect(healthLabel(75)).toBe("Good");
+    expect(healthLabel(74.9)).toBe("Attention Needed");
+    expect(healthLabel(60)).toBe("Attention Needed");
+    expect(healthLabel(59.9)).toBe("Critical Attention");
+    expect(healthLabel(null)).toBe("Not Available");
   });
 });

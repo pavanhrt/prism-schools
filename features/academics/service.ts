@@ -73,3 +73,4 @@ export const deleteAcademicYear = repo.deleteAcademicYear;
 export const deleteClass = repo.deleteClass;
 export const deleteSection = repo.deleteSection;
 export const deleteSubject = repo.deleteSubject;
+export const listSubjects = repo.listSubjects;

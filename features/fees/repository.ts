@@ -92,6 +92,14 @@ export async function listInvoiceItems(
   return data;
 }
 
+/** Bulk read across every invoice's line items — used by Management
+ * Intelligence for fee-type collection analytics without an N+1 fetch. */
+export async function listAllInvoiceItems(supabase: SupabaseClient): Promise<FeeInvoiceItem[]> {
+  const { data, error } = await supabase.from("fee_invoice_items").select("*");
+  if (error) throw error;
+  return data;
+}
+
 // ---- Payments ----------------------------------------------------------------
 
 export async function listAllPayments(supabase: SupabaseClient): Promise<FeePayment[]> {

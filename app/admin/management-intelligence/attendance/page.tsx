@@ -5,18 +5,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
-import { getAttendanceIntelligence, listAcademicYears, listClassesAndSections, listStudentOptions } from "@/features/management-intelligence/service";
+import { getAttendanceIntelligence, getManagementOverview, listAcademicYears, listClassesAndSections, listStudentOptions } from "@/features/management-intelligence/service";
+import { MetricCard } from "@/features/management-intelligence/components/metric-card";
 
 type Params = { academic_year_id?: string; start?: string; end?: string; class_id?: string; section_id?: string; student_id?: string; status?: string; severity?: string; page?: string };
 
 export default async function AttendanceIntelligencePage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
   const supabase = await createClient();
-  const [analytics, academics, academicYears, students] = await Promise.all([
+  const [analytics, academics, academicYears, students, overview] = await Promise.all([
     getAttendanceIntelligence(supabase, { academicYearId: params.academic_year_id, start: params.start, end: params.end, classId: params.class_id, sectionId: params.section_id, studentId: params.student_id, includeStaff: false }),
     listClassesAndSections(supabase),
     listAcademicYears(supabase),
     listStudentOptions(supabase, params.academic_year_id),
+    getManagementOverview(supabase),
   ]);
   let rows = analytics.studentInsights;
   if (params.severity) rows = rows.filter((row) => row.severity === params.severity);
@@ -32,6 +34,13 @@ export default async function AttendanceIntelligencePage({ searchParams }: { sea
   return (
     <div className="flex flex-col gap-6">
       <div><h1 className="text-xl font-semibold text-slate-900">Attendance Intelligence</h1><p className="text-sm text-slate-500">Recorded working-day attendance, comparable-period trend, and explicit absence streaks.</p></div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Student Attendance Recorded Today" value={overview.students.coverageToday.recordedCount} note={`of ${overview.students.coverageToday.activeCount} active students`} />
+        <MetricCard label="Student Attendance Missing Today" value={overview.students.coverageToday.missingCount} />
+        <MetricCard label="Staff Attendance Recorded Today" value={overview.staff.coverageToday.recordedCount} note={`of ${overview.staff.coverageToday.activeCount} active staff`} />
+        <MetricCard label="Staff Attendance Missing Today" value={overview.staff.coverageToday.missingCount} />
+      </div>
+      <p className="text-xs text-slate-400">Attendance percentage uses recorded attendance only. Coverage shows how much of today&apos;s attendance has been entered.</p>
       <Card><CardContent>
         <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <label className="text-xs font-medium text-slate-600">Academic year<select name="academic_year_id" defaultValue={analytics.academicYear?.id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm">{academicYears.map((item) => <option key={item.id} value={item.id}>{item.year_label}{item.is_current ? " (current)" : ""}</option>)}</select></label>

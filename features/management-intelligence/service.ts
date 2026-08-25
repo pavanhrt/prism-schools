@@ -1,11 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import * as academicsService from "@/features/academics/service";
+import * as examsService from "@/features/exams/service";
+import * as feesService from "@/features/fees/service";
+import * as teachingService from "@/features/teaching/service";
+import type { ExamResult, ExamSchedule } from "@/types/exams";
 import * as repo from "./repository";
+import { summarizeAcademicDelivery } from "./academics";
+import { summarizeFees } from "./fees-intelligence";
+import { summarizeClassPerformance, summarizeStudentPerformance } from "./performance";
 import {
+  addDays,
   attendanceTrend,
   alertRefreshDecision,
   buildWorkingDays,
   calculateAttendance,
+  computeCoverage,
+  computeHealthScore,
   consecutiveAbsenceDays,
+  feeOverdueSeverity,
+  healthLabel,
   lowAttendanceSeverity,
   isDateCoveredByApprovedLeave,
   isAlertTransitionAllowed,
@@ -15,6 +28,7 @@ import {
 } from "./rules";
 import type {
   AlertSeverity,
+  DeliveryStatus,
   ManagementAlert,
   ManagementOverview,
   StaffInsight,
@@ -28,6 +42,22 @@ const SETTING_DEFAULTS = {
   student_low_attendance_critical_pct: 65,
   student_attendance_decline_points: 10,
   staff_absence_warning_days: 3,
+  academic_lag_slightly_behind_days: 1,
+  academic_lag_warning_days: 4,
+  academic_lag_critical_days: 8,
+  performance_change_points: 3,
+  performance_strong_change_points: 10,
+  performance_attention_score_pct: 40,
+  fee_overdue_warning_days: 7,
+  fee_overdue_critical_days: 30,
+  fee_significant_overdue_amount: 5000,
+  fee_collection_rate_warning_pct: 60,
+  health_weight_student_attendance: 25,
+  health_weight_academic_progress: 25,
+  health_weight_performance: 25,
+  health_weight_staff_attendance: 10,
+  health_weight_delivery: 10,
+  health_weight_fees: 5,
 } as const;
 
 export interface AnalyticsFilters {
@@ -221,6 +251,7 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
         absentCritical: 0,
         belowWarning: 0,
         belowCritical: 0,
+        coverageToday: computeCoverage(0, 0),
       },
       staff: {
         active: 0,
@@ -228,6 +259,7 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
         absentToday: { value: null, dataAvailable: false },
         attendancePercentage: { value: null, dataAvailable: false },
         absentWarning: 0,
+        coverageToday: computeCoverage(0, 0),
       },
       evaluationMessage: "No current academic year is configured.",
     };
@@ -278,6 +310,7 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
       belowCritical: analytics.studentInsights.filter(
         (row) => row.attendancePercentage !== null && row.attendancePercentage < analytics.settings.student_low_attendance_critical_pct,
       ).length,
+      coverageToday: computeCoverage(analytics.studentInsights.length, studentRecorded),
     },
     staff: {
       active: analytics.staffInsights.length,
@@ -296,6 +329,7 @@ export async function getManagementOverview(supabase: SupabaseClient): Promise<M
       absentWarning: analytics.staffInsights.filter(
         (row) => row.consecutiveAbsenceDays >= analytics.settings.staff_absence_warning_days,
       ).length,
+      coverageToday: computeCoverage(analytics.staffInsights.length, todayStaffRows.length),
     },
     evaluationMessage: studentData || staffData ? null : "Insufficient attendance data to evaluate attendance rules.",
   };
@@ -566,8 +600,785 @@ export async function listStudentOptions(supabase: SupabaseClient, academicYearI
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function alertDestination(alert: Pick<ManagementAlert, "student_id" | "staff_id">): string {
+export function alertDestination(
+  alert: Pick<ManagementAlert, "student_id" | "staff_id"> &
+    Partial<Pick<ManagementAlert, "category" | "class_id" | "section_id" | "subject_id">>,
+): string {
+  if (alert.category === "PERFORMANCE" && alert.student_id) {
+    return `/admin/management-intelligence/performance?student_id=${encodeURIComponent(alert.student_id)}`;
+  }
+  if (alert.category === "FEES" && alert.student_id) {
+    return `/admin/students/${encodeURIComponent(alert.student_id)}`;
+  }
+  if (alert.category === "ACADEMICS" && alert.class_id) {
+    const query = new URLSearchParams();
+    query.set("class_id", alert.class_id);
+    if (alert.section_id) query.set("section_id", alert.section_id);
+    if (alert.subject_id) query.set("subject_id", alert.subject_id);
+    return `/admin/management-intelligence/academics?${query.toString()}`;
+  }
   if (alert.student_id) return `/admin/management-intelligence/attendance?student_id=${encodeURIComponent(alert.student_id)}`;
   if (alert.staff_id) return `/admin/staff/${encodeURIComponent(alert.staff_id)}`;
   return "/admin/management-intelligence/alerts";
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: Academic Intelligence
+// -----------------------------------------------------------------------------
+export interface AcademicFilters {
+  academicYearId?: string;
+  end?: string;
+  classId?: string;
+  sectionId?: string;
+  subjectId?: string;
+  teacherId?: string;
+  status?: DeliveryStatus;
+}
+
+export async function getAcademicIntelligence(supabase: SupabaseClient, filters: AcademicFilters = {}) {
+  const academicYear = filters.academicYearId
+    ? await repo.getAcademicYear(supabase, filters.academicYearId)
+    : await repo.getCurrentAcademicYear(supabase);
+  const asOfDate = filters.end ?? todayInSchoolTimezone();
+  if (!academicYear) return { academicYear: null, asOfDate, rows: [], settings: null };
+
+  const [settingsRows, assignments, lessonPlans, classesAndSections, subjects, teacherProfiles, calendar] = await Promise.all([
+    repo.listSettings(supabase),
+    teachingService.listTeacherAssignments(supabase),
+    teachingService.listLessonPlans(supabase),
+    repo.listClassesAndSections(supabase),
+    academicsService.listSubjects(supabase),
+    teachingService.listTeacherProfiles(supabase),
+    repo.listCalendarConfiguration(supabase, academicYear.id, academicYear.start_date, asOfDate),
+  ]);
+  const settings = numericSettings(settingsRows);
+  const workingDays = buildWorkingDays(academicYear.start_date, asOfDate, calendar.weeklyOffDays, calendar.overrides);
+
+  const classById = new Map(classesAndSections.classes.map((item) => [item.id, item.name]));
+  const sectionById = new Map(classesAndSections.sections.map((item) => [item.id, item.name]));
+  const subjectById = new Map(subjects.map((item) => [item.id, item.name]));
+  const teacherById = new Map(teacherProfiles.map((item) => [item.id, item.full_name]));
+
+  const relevantAssignments = assignments.filter((item) => item.academic_year_id === academicYear.id && item.subject_id !== null);
+  const yearLessonPlans = lessonPlans.filter((item) => item.academic_year_id === academicYear.id);
+
+  const rows = relevantAssignments
+    .filter(
+      (item) =>
+        (!filters.classId || item.class_id === filters.classId) &&
+        (!filters.sectionId || item.section_id === filters.sectionId) &&
+        (!filters.subjectId || item.subject_id === filters.subjectId) &&
+        (!filters.teacherId || item.teacher_id === filters.teacherId),
+    )
+    .map((item) => ({
+      classId: item.class_id,
+      className: classById.get(item.class_id) ?? "Unknown class",
+      sectionId: item.section_id,
+      sectionName: sectionById.get(item.section_id) ?? "Unknown section",
+      subjectId: item.subject_id as string,
+      subjectName: subjectById.get(item.subject_id as string) ?? "Unknown subject",
+      teacherId: item.teacher_id,
+      teacherName: teacherById.get(item.teacher_id) ?? null,
+    }));
+
+  const insights = summarizeAcademicDelivery({
+    rows,
+    lessonPlans: yearLessonPlans,
+    asOfDate,
+    workingDays,
+    slightlyBehindDays: settings.academic_lag_slightly_behind_days,
+    warningDays: settings.academic_lag_warning_days,
+    criticalDays: settings.academic_lag_critical_days,
+  });
+
+  const filteredRows = filters.status ? insights.filter((item) => item.status === filters.status) : insights;
+
+  return { academicYear, asOfDate, rows: filteredRows, settings, classesAndSections, subjects, teacherProfiles };
+}
+
+export async function refreshAcademicAlerts(supabase: SupabaseClient) {
+  const analytics = await getAcademicIntelligence(supabase);
+  if (!analytics.academicYear || !analytics.settings) return { created: 0, updated: 0, reopened: 0, resolved: 0 };
+  const ay = analytics.academicYear;
+  const candidates: {
+    fingerprint: string;
+    rule_key: string;
+    alert_type: string;
+    category: "ACADEMICS";
+    severity: AlertSeverity;
+    entity_type: "class_subject";
+    entity_id: null;
+    class_id: string;
+    section_id: string | null;
+    subject_id: string;
+    academic_year_id: string;
+    period_start: string;
+    period_end: string;
+    title: string;
+    message: string;
+    current_value: number;
+    threshold_value: number;
+  }[] = [];
+
+  for (const row of analytics.rows) {
+    if (row.status === "WARNING" || row.status === "CRITICAL") {
+      const threshold = row.status === "CRITICAL" ? analytics.settings.academic_lag_critical_days : analytics.settings.academic_lag_warning_days;
+      candidates.push({
+        fingerprint: `academic_subject_lag:${ay.id}:${row.classId}:${row.sectionId}:${row.subjectId}`,
+        rule_key: row.status === "CRITICAL" ? "subject_lag_critical" : "subject_lag_warning",
+        alert_type: "ACADEMIC_DELIVERY_LAG",
+        category: "ACADEMICS",
+        severity: row.status,
+        entity_type: "class_subject",
+        entity_id: null,
+        class_id: row.classId,
+        section_id: row.sectionId,
+        subject_id: row.subjectId,
+        academic_year_id: ay.id,
+        period_start: analytics.academicYear.start_date,
+        period_end: analytics.asOfDate,
+        title: `${row.subjectName} (${row.className} ${row.sectionName}) is ${row.lagDays} working days behind plan`,
+        message: `Triggered because the oldest incomplete lesson plan for ${row.subjectName} in ${row.className} ${row.sectionName} is ${row.lagDays} working days overdue, at or above the configured ${threshold}-day ${row.status.toLowerCase()} threshold. Data source: lesson_plans.status and the school working-day calendar.`,
+        current_value: row.lagDays ?? 0,
+        threshold_value: threshold,
+      });
+    }
+  }
+
+  const existing = await repo.listAlertsByFingerprints(supabase, candidates.map((item) => item.fingerprint));
+  const byFingerprint = new Map(existing.map((alert) => [alert.fingerprint, alert]));
+  let created = 0;
+  let updated = 0;
+  let reopened = 0;
+  for (const candidate of candidates) {
+    const prior = byFingerprint.get(candidate.fingerprint);
+    const decision = alertRefreshDecision(prior?.status ?? null);
+    const isReopen = decision === "REOPEN";
+    const alert = await repo.upsertAlert(supabase, {
+      ...candidate,
+      status: isReopen ? "OPEN" : prior?.status ?? "OPEN",
+      first_detected_at: isReopen ? new Date().toISOString() : prior?.first_detected_at ?? new Date().toISOString(),
+      last_detected_at: new Date().toISOString(),
+      acknowledged_by: isReopen ? null : prior?.acknowledged_by ?? null,
+      acknowledged_at: isReopen ? null : prior?.acknowledged_at ?? null,
+      resolved_by: null,
+      resolved_at: null,
+    });
+    await repo.insertAlertEvent(supabase, {
+      alert_id: alert.id,
+      event_type: decision === "CREATE" ? "CREATED" : decision === "REOPEN" ? "REOPENED" : "UPDATED",
+      from_status: prior?.status ?? null,
+      to_status: alert.status,
+    });
+    if (!prior) created += 1;
+    else if (isReopen) reopened += 1;
+    else updated += 1;
+  }
+
+  const candidateFingerprints = new Set(candidates.map((item) => item.fingerprint));
+  const active = await repo.listActiveAcademicAlerts(supabase, ay.id);
+  let resolved = 0;
+  for (const alert of active) {
+    if (candidateFingerprints.has(alert.fingerprint)) continue;
+    const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
+    await repo.insertAlertEvent(supabase, {
+      alert_id: updatedAlert.id,
+      event_type: "AUTO_RESOLVED",
+      from_status: alert.status,
+      to_status: "RESOLVED",
+      note: "The subject's delivery lag no longer meets the warning/critical threshold.",
+    });
+    resolved += 1;
+  }
+  return { created, updated, reopened, resolved };
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: Performance Intelligence
+// -----------------------------------------------------------------------------
+export interface PerformanceFilters {
+  academicYearId?: string;
+  examId?: string;
+  classId?: string;
+  sectionId?: string;
+  subjectId?: string;
+  studentId?: string;
+  trend?: string;
+}
+
+function examResultToRow(result: ExamResult, scheduleById: Map<string, ExamSchedule>, subjectById: Map<string, string>) {
+  const schedule = scheduleById.get(result.exam_schedule_id)!;
+  return {
+    studentId: result.student_id,
+    subjectId: schedule.subject_id,
+    subjectName: subjectById.get(schedule.subject_id) ?? "Unknown subject",
+    marksTheory: result.marks_theory,
+    marksPractical: result.marks_practical,
+    maxMarksTheory: schedule.max_marks_theory,
+    maxMarksPractical: schedule.max_marks_practical,
+    passMarks: schedule.pass_marks,
+  };
+}
+
+export async function getPerformanceIntelligence(supabase: SupabaseClient, filters: PerformanceFilters = {}) {
+  const academicYear = filters.academicYearId
+    ? await repo.getAcademicYear(supabase, filters.academicYearId)
+    : await repo.getCurrentAcademicYear(supabase);
+  if (!academicYear) return { academicYear: null, exams: [], selectedExam: null, previousExam: null, insights: [], classSummary: [], settings: null };
+
+  const [settingsRows, terms, exams, schedules, gradeScales, roster, subjects] = await Promise.all([
+    repo.listSettings(supabase),
+    examsService.listExamTerms(supabase),
+    examsService.listExams(supabase),
+    examsService.listExamSchedules(supabase),
+    examsService.listGradeScales(supabase),
+    repo.listCurrentRoster(supabase, academicYear.id, filters.classId, filters.sectionId, filters.studentId),
+    academicsService.listSubjects(supabase),
+  ]);
+  const settings = numericSettings(settingsRows);
+  const subjectById = new Map(subjects.map((item) => [item.id, item.name]));
+
+  // Comparable-exam logic (documented in ./performance.ts): exams within the
+  // same academic year, ordered by creation time (no explicit sequence
+  // column exists), restricted to schedules with an authoritative
+  // (published/locked) result status.
+  const termIdsForYear = new Set(terms.filter((term) => term.academic_year_id === academicYear.id).map((term) => term.id));
+  const yearExams = [...exams].filter((exam) => termIdsForYear.has(exam.term_id)).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const authoritativeSchedules = schedules.filter((schedule) => schedule.result_status === "published" || schedule.result_status === "locked");
+  const schedulesByExam = groupBy(authoritativeSchedules, (schedule) => schedule.exam_id);
+  const examsWithResults = yearExams.filter((exam) => (schedulesByExam.get(exam.id) ?? []).length > 0);
+
+  if (examsWithResults.length === 0) {
+    return { academicYear, exams: yearExams, selectedExam: null, previousExam: null, insights: [], classSummary: [], settings };
+  }
+
+  const selectedExam = (filters.examId && examsWithResults.find((exam) => exam.id === filters.examId)) || examsWithResults[examsWithResults.length - 1];
+  const selectedIndex = examsWithResults.findIndex((exam) => exam.id === selectedExam.id);
+  const previousExam = selectedIndex > 0 ? examsWithResults[selectedIndex - 1] : null;
+
+  const scopeFilter = (schedule: (typeof authoritativeSchedules)[number]) =>
+    (!filters.classId || schedule.class_id === filters.classId) && (!filters.subjectId || schedule.subject_id === filters.subjectId);
+  const selectedSchedules = (schedulesByExam.get(selectedExam.id) ?? []).filter(scopeFilter);
+  const previousSchedules = previousExam ? (schedulesByExam.get(previousExam.id) ?? []).filter(scopeFilter) : [];
+  const scheduleById = new Map([...selectedSchedules, ...previousSchedules].map((schedule) => [schedule.id, schedule]));
+
+  const [selectedResults, previousResults] = await Promise.all([
+    examsService.listResultsForSchedules(supabase, selectedSchedules.map((schedule) => schedule.id)),
+    examsService.listResultsForSchedules(supabase, previousSchedules.map((schedule) => schedule.id)),
+  ]);
+
+  const rosterEntries = roster.map((item) => ({
+    studentId: item.student_id,
+    admissionNo: item.students.admission_no,
+    studentName: `${item.students.first_name} ${item.students.last_name}`,
+    classId: item.class_id,
+    className: item.classes.name,
+    sectionId: item.section_id,
+    sectionName: item.sections.name,
+  }));
+
+  let insights = summarizeStudentPerformance({
+    roster: rosterEntries,
+    selectedExamId: selectedExam.id,
+    selectedExamName: selectedExam.name,
+    selectedExamResults: selectedResults.map((result) => examResultToRow(result, scheduleById, subjectById)),
+    previousExamResults: previousResults.map((result) => examResultToRow(result, scheduleById, subjectById)),
+    gradeScales,
+    changePoints: settings.performance_change_points,
+    strongChangePoints: settings.performance_strong_change_points,
+    attentionScorePct: settings.performance_attention_score_pct,
+  });
+
+  const classSummary = summarizeClassPerformance(insights);
+  if (filters.trend) insights = insights.filter((item) => item.trend === filters.trend);
+
+  return { academicYear, exams: examsWithResults, selectedExam, previousExam, insights, classSummary, settings };
+}
+
+export async function refreshPerformanceAlerts(supabase: SupabaseClient) {
+  const analytics = await getPerformanceIntelligence(supabase);
+  if (!analytics.academicYear || !analytics.selectedExam || !analytics.settings) return { created: 0, updated: 0, reopened: 0, resolved: 0 };
+  const ay = analytics.academicYear;
+  const exam = analytics.selectedExam;
+  const candidates: {
+    fingerprint: string;
+    rule_key: string;
+    alert_type: string;
+    category: "PERFORMANCE";
+    severity: AlertSeverity;
+    entity_type: "student";
+    entity_id: string;
+    student_id: string;
+    class_id: string;
+    section_id: string;
+    academic_year_id: string;
+    period_start: string;
+    period_end: string;
+    title: string;
+    message: string;
+    current_value: number;
+    threshold_value: number;
+  }[] = [];
+
+  for (const row of analytics.insights) {
+    if (row.trend === "DECLINING" || row.trend === "STRONGLY_DECLINING") {
+      candidates.push({
+        fingerprint: `student_performance_decline:${ay.id}:${exam.id}:${row.studentId}`,
+        rule_key: "student_performance_decline",
+        alert_type: "PERFORMANCE_DECLINE",
+        category: "PERFORMANCE",
+        severity: row.trend === "STRONGLY_DECLINING" ? "CRITICAL" : "WARNING",
+        entity_type: "student",
+        entity_id: row.studentId,
+        student_id: row.studentId,
+        class_id: row.classId,
+        section_id: row.sectionId,
+        academic_year_id: ay.id,
+        period_start: exam.created_at.slice(0, 10),
+        period_end: exam.created_at.slice(0, 10),
+        title: `${row.studentName} performance changed ${row.differencePoints} points in ${exam.name}`,
+        message: `Triggered because overall performance changed from ${row.previousPercentage}% to ${row.latestPercentage}% (${row.differencePoints} percentage points) between the previous comparable exam and ${exam.name}.`,
+        current_value: Math.abs(row.differencePoints ?? 0),
+        threshold_value: analytics.settings.performance_change_points,
+      });
+    }
+    if (row.failedSubjects.length > 0) {
+      candidates.push({
+        fingerprint: `student_failed_subjects:${ay.id}:${exam.id}:${row.studentId}`,
+        rule_key: "failed_subjects",
+        alert_type: "FAILED_SUBJECTS",
+        category: "PERFORMANCE",
+        severity: row.failedSubjects.length > 1 ? "CRITICAL" : "WARNING",
+        entity_type: "student",
+        entity_id: row.studentId,
+        student_id: row.studentId,
+        class_id: row.classId,
+        section_id: row.sectionId,
+        academic_year_id: ay.id,
+        period_start: exam.created_at.slice(0, 10),
+        period_end: exam.created_at.slice(0, 10),
+        title: `${row.studentName} is failing ${row.failedSubjects.length} subject${row.failedSubjects.length > 1 ? "s" : ""} in ${exam.name}`,
+        message: `Triggered because ${row.studentName} scored below the pass mark in: ${row.failedSubjects.join(", ")}, in the published/locked results for ${exam.name}.`,
+        current_value: row.failedSubjects.length,
+        threshold_value: 1,
+      });
+    } else if (row.subjectsRequiringAttention.length >= 2) {
+      candidates.push({
+        fingerprint: `student_multiple_subject_decline:${ay.id}:${exam.id}:${row.studentId}`,
+        rule_key: "multiple_subject_decline",
+        alert_type: "MULTIPLE_SUBJECT_ATTENTION",
+        category: "PERFORMANCE",
+        severity: "WARNING",
+        entity_type: "student",
+        entity_id: row.studentId,
+        student_id: row.studentId,
+        class_id: row.classId,
+        section_id: row.sectionId,
+        academic_year_id: ay.id,
+        period_start: exam.created_at.slice(0, 10),
+        period_end: exam.created_at.slice(0, 10),
+        title: `${row.studentName} has ${row.subjectsRequiringAttention.length} subjects requiring attention in ${exam.name}`,
+        message: row.subjectsRequiringAttention.map((item) => item.reason).join(" "),
+        current_value: row.subjectsRequiringAttention.length,
+        threshold_value: 2,
+      });
+    }
+  }
+
+  const existing = await repo.listAlertsByFingerprints(supabase, candidates.map((item) => item.fingerprint));
+  const byFingerprint = new Map(existing.map((alert) => [alert.fingerprint, alert]));
+  let created = 0;
+  let updated = 0;
+  let reopened = 0;
+  for (const candidate of candidates) {
+    const prior = byFingerprint.get(candidate.fingerprint);
+    const decision = alertRefreshDecision(prior?.status ?? null);
+    const isReopen = decision === "REOPEN";
+    const alert = await repo.upsertAlert(supabase, {
+      ...candidate,
+      status: isReopen ? "OPEN" : prior?.status ?? "OPEN",
+      first_detected_at: isReopen ? new Date().toISOString() : prior?.first_detected_at ?? new Date().toISOString(),
+      last_detected_at: new Date().toISOString(),
+      acknowledged_by: isReopen ? null : prior?.acknowledged_by ?? null,
+      acknowledged_at: isReopen ? null : prior?.acknowledged_at ?? null,
+      resolved_by: null,
+      resolved_at: null,
+    });
+    await repo.insertAlertEvent(supabase, {
+      alert_id: alert.id,
+      event_type: decision === "CREATE" ? "CREATED" : decision === "REOPEN" ? "REOPENED" : "UPDATED",
+      from_status: prior?.status ?? null,
+      to_status: alert.status,
+    });
+    if (!prior) created += 1;
+    else if (isReopen) reopened += 1;
+    else updated += 1;
+  }
+
+  const candidateFingerprints = new Set(candidates.map((item) => item.fingerprint));
+  const active = await repo.listActivePerformanceAlerts(supabase, ay.id);
+  let resolved = 0;
+  for (const alert of active) {
+    if (candidateFingerprints.has(alert.fingerprint)) continue;
+    const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
+    await repo.insertAlertEvent(supabase, {
+      alert_id: updatedAlert.id,
+      event_type: "AUTO_RESOLVED",
+      from_status: alert.status,
+      to_status: "RESOLVED",
+      note: "The condition was no longer present in the latest performance evaluation.",
+    });
+    resolved += 1;
+  }
+  return { created, updated, reopened, resolved };
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: Fee Intelligence
+// -----------------------------------------------------------------------------
+export interface FeeFilters {
+  academicYearId?: string;
+  classId?: string;
+  sectionId?: string;
+}
+
+export async function getFeeIntelligence(supabase: SupabaseClient, filters: FeeFilters = {}) {
+  const academicYear = filters.academicYearId
+    ? await repo.getAcademicYear(supabase, filters.academicYearId)
+    : await repo.getCurrentAcademicYear(supabase);
+  const today = todayInSchoolTimezone();
+
+  const [settingsRows, invoices, payments, invoiceItems, feeTypes, roster] = await Promise.all([
+    repo.listSettings(supabase),
+    feesService.listInvoices(supabase),
+    feesService.listAllPayments(supabase),
+    feesService.listAllInvoiceItems(supabase),
+    feesService.listFeeTypes(supabase),
+    academicYear ? repo.listCurrentRoster(supabase, academicYear.id, filters.classId, filters.sectionId) : Promise.resolve([]),
+  ]);
+  const settings = numericSettings(settingsRows);
+  const rosterMap = new Map(
+    roster.map((item) => [
+      item.student_id,
+      {
+        admissionNo: item.students.admission_no,
+        studentName: `${item.students.first_name} ${item.students.last_name}`,
+        classId: item.class_id,
+        className: item.classes.name,
+        sectionId: item.section_id,
+        sectionName: item.sections.name,
+      },
+    ]),
+  );
+  const isClassScoped = Boolean(filters.classId || filters.sectionId);
+  const scopedInvoices = invoices.filter(
+    (invoice) => (!academicYear || invoice.academic_year_id === academicYear.id) && (!isClassScoped || rosterMap.has(invoice.student_id)),
+  );
+
+  const result = summarizeFees({
+    invoices: scopedInvoices,
+    payments,
+    invoiceItems,
+    feeTypeNames: new Map(feeTypes.map((item) => [item.id, item.name])),
+    roster: rosterMap,
+    today,
+    overdueWarningDays: settings.fee_overdue_warning_days,
+    overdueCriticalDays: settings.fee_overdue_critical_days,
+  });
+
+  return { academicYear, today, settings, ...result };
+}
+
+export async function refreshFeeAlerts(supabase: SupabaseClient) {
+  const analytics = await getFeeIntelligence(supabase);
+  if (!analytics.academicYear || !analytics.settings) return { created: 0, updated: 0, reopened: 0, resolved: 0 };
+  const ay = analytics.academicYear;
+  const settings = analytics.settings;
+  const candidates: {
+    fingerprint: string;
+    rule_key: string;
+    alert_type: string;
+    category: "FEES";
+    severity: AlertSeverity;
+    entity_type: "student";
+    entity_id: string;
+    student_id: string;
+    academic_year_id: string;
+    period_start: string;
+    period_end: string;
+    title: string;
+    message: string;
+    current_value: number;
+    threshold_value: number;
+  }[] = [];
+
+  for (const row of analytics.overdueStudents) {
+    const severity = feeOverdueSeverity(row.overdueDays, settings.fee_overdue_warning_days, settings.fee_overdue_critical_days);
+    if (!severity) continue;
+    candidates.push({
+      fingerprint: `fee_overdue:${row.studentId}:${row.invoiceId}`,
+      rule_key: "fee_overdue",
+      alert_type: "FEE_OVERDUE",
+      category: "FEES",
+      severity,
+      entity_type: "student",
+      entity_id: row.studentId,
+      student_id: row.studentId,
+      academic_year_id: ay.id,
+      period_start: row.dueDate,
+      period_end: analytics.today,
+      title: `${row.studentName} has an overdue balance of ${row.balance} (${row.overdueDays} days)`,
+      message: `Triggered because invoice ${row.invoiceNo} has an outstanding balance of ${row.balance}, ${row.overdueDays} days past its due date of ${row.dueDate}.`,
+      current_value: row.overdueDays,
+      threshold_value: settings.fee_overdue_warning_days,
+    });
+    if (row.balance >= settings.fee_significant_overdue_amount) {
+      candidates.push({
+        fingerprint: `significant_fee_overdue:${row.studentId}:${row.invoiceId}`,
+        rule_key: "significant_fee_overdue",
+        alert_type: "SIGNIFICANT_FEE_OVERDUE",
+        category: "FEES",
+        severity: "CRITICAL",
+        entity_type: "student",
+        entity_id: row.studentId,
+        student_id: row.studentId,
+        academic_year_id: ay.id,
+        period_start: row.dueDate,
+        period_end: analytics.today,
+        title: `${row.studentName} has a significant overdue balance of ${row.balance}`,
+        message: `Triggered because the overdue balance of ${row.balance} on invoice ${row.invoiceNo} is at or above the configured significant-overdue amount of ${settings.fee_significant_overdue_amount}.`,
+        current_value: row.balance,
+        threshold_value: settings.fee_significant_overdue_amount,
+      });
+    }
+  }
+
+  const existing = await repo.listAlertsByFingerprints(supabase, candidates.map((item) => item.fingerprint));
+  const byFingerprint = new Map(existing.map((alert) => [alert.fingerprint, alert]));
+  let created = 0;
+  let updated = 0;
+  let reopened = 0;
+  for (const candidate of candidates) {
+    const prior = byFingerprint.get(candidate.fingerprint);
+    const decision = alertRefreshDecision(prior?.status ?? null);
+    const isReopen = decision === "REOPEN";
+    const alert = await repo.upsertAlert(supabase, {
+      ...candidate,
+      status: isReopen ? "OPEN" : prior?.status ?? "OPEN",
+      first_detected_at: isReopen ? new Date().toISOString() : prior?.first_detected_at ?? new Date().toISOString(),
+      last_detected_at: new Date().toISOString(),
+      acknowledged_by: isReopen ? null : prior?.acknowledged_by ?? null,
+      acknowledged_at: isReopen ? null : prior?.acknowledged_at ?? null,
+      resolved_by: null,
+      resolved_at: null,
+    });
+    await repo.insertAlertEvent(supabase, {
+      alert_id: alert.id,
+      event_type: decision === "CREATE" ? "CREATED" : decision === "REOPEN" ? "REOPENED" : "UPDATED",
+      from_status: prior?.status ?? null,
+      to_status: alert.status,
+    });
+    if (!prior) created += 1;
+    else if (isReopen) reopened += 1;
+    else updated += 1;
+  }
+
+  // AUTO_RESOLVE: an overdue-fee alert clears once its invoice no longer
+  // carries a positive overdue balance (paid down or no longer past due).
+  const candidateFingerprints = new Set(candidates.map((item) => item.fingerprint));
+  const active = await repo.listActiveFeeAlerts(supabase, ay.id);
+  let resolved = 0;
+  for (const alert of active) {
+    if (candidateFingerprints.has(alert.fingerprint)) continue;
+    const updatedAlert = await repo.updateAlert(supabase, alert.id, { status: "RESOLVED", resolved_at: new Date().toISOString(), resolved_by: null });
+    await repo.insertAlertEvent(supabase, {
+      alert_id: updatedAlert.id,
+      event_type: "AUTO_RESOLVED",
+      from_status: alert.status,
+      to_status: "RESOLVED",
+      note: "The invoice no longer carries an overdue balance.",
+    });
+    resolved += 1;
+  }
+  return { created, updated, reopened, resolved };
+}
+
+function sumRefresh(...results: { created: number; updated: number; reopened: number; resolved: number }[]) {
+  return results.reduce(
+    (total, item) => ({
+      created: total.created + item.created,
+      updated: total.updated + item.updated,
+      reopened: total.reopened + item.reopened,
+      resolved: total.resolved + item.resolved,
+    }),
+    { created: 0, updated: 0, reopened: 0, resolved: 0 },
+  );
+}
+
+export async function refreshAllAlerts(supabase: SupabaseClient) {
+  const [attendance, academic, performance, fees] = await Promise.all([
+    refreshAttendanceAlerts(supabase),
+    refreshAcademicAlerts(supabase),
+    refreshPerformanceAlerts(supabase),
+    refreshFeeAlerts(supabase),
+  ]);
+  return sumRefresh(attendance, academic, performance, fees);
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: School Health Score
+// -----------------------------------------------------------------------------
+function academicStatusScore(status: DeliveryStatus): number | null {
+  switch (status) {
+    case "ON_TRACK":
+      return 100;
+    case "SLIGHTLY_BEHIND":
+      return 80;
+    case "WARNING":
+      return 50;
+    case "CRITICAL":
+      return 20;
+    default:
+      return null;
+  }
+}
+
+export async function getSchoolHealthScore(supabase: SupabaseClient, academicYearId?: string) {
+  const [attendance, academic, performance, fees, settingsRows] = await Promise.all([
+    getAttendanceIntelligence(supabase, { academicYearId }),
+    getAcademicIntelligence(supabase, { academicYearId }),
+    getPerformanceIntelligence(supabase, { academicYearId }),
+    getFeeIntelligence(supabase, { academicYearId }),
+    repo.listSettings(supabase),
+  ]);
+  const settings = numericSettings(settingsRows);
+
+  const studentRecorded = attendance.studentInsights.reduce((sum, row) => sum + row.recordedWorkingDays, 0);
+  const studentPresent = attendance.studentInsights.reduce((sum, row) => sum + row.presentDays, 0);
+  const studentAttendanceScore = studentRecorded > 0 ? Math.round((studentPresent / studentRecorded) * 10_000) / 100 : null;
+
+  const staffRecorded = attendance.staffInsights.reduce((sum, row) => sum + row.recordedWorkingDays, 0);
+  const staffPresent = attendance.staffInsights.reduce((sum, row) => sum + row.presentDays, 0);
+  const staffAttendanceScore = staffRecorded > 0 ? Math.round((staffPresent / staffRecorded) * 10_000) / 100 : null;
+
+  const evaluableAcademicRows = academic.rows.filter((row) => row.status !== "INSUFFICIENT_DATA");
+  const academicScores = evaluableAcademicRows.map((row) => academicStatusScore(row.status)).filter((value): value is number => value !== null);
+  const academicProgressScore = academicScores.length > 0 ? Math.round((academicScores.reduce((sum, value) => sum + value, 0) / academicScores.length) * 100) / 100 : null;
+
+  const deliveryRows = academic.rows.filter((row) => row.evidenceCoveragePercentage !== null);
+  const deliveryScore =
+    deliveryRows.length > 0
+      ? Math.round((deliveryRows.reduce((sum, row) => sum + (row.evidenceCoveragePercentage ?? 0), 0) / deliveryRows.length) * 100) / 100
+      : null;
+
+  const evaluatedStudents = performance.insights.filter((row) => row.latestPercentage !== null);
+  const performanceScore =
+    evaluatedStudents.length > 0
+      ? Math.round((evaluatedStudents.reduce((sum, row) => sum + (row.latestPercentage ?? 0), 0) / evaluatedStudents.length) * 100) / 100
+      : null;
+
+  const feeScore = fees.summary.dataCoverage === "NOT_RECORDED" ? null : fees.summary.collectionPercentage;
+
+  const result = computeHealthScore([
+    { key: "student_attendance", label: "Student Attendance", weight: settings.health_weight_student_attendance, score: studentAttendanceScore },
+    { key: "academic_progress", label: "Academic Progress", weight: settings.health_weight_academic_progress, score: academicProgressScore },
+    { key: "performance", label: "Student Performance", weight: settings.health_weight_performance, score: performanceScore },
+    { key: "staff_attendance", label: "Staff Attendance", weight: settings.health_weight_staff_attendance, score: staffAttendanceScore },
+    { key: "delivery", label: "Timetable/Delivery", weight: settings.health_weight_delivery, score: deliveryScore },
+    { key: "fees", label: "Fee Collection", weight: settings.health_weight_fees, score: feeScore },
+  ]);
+
+  return { ...result, label: healthLabel(result.score), academicYearId: attendance.academicYear?.id ?? null };
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: Management Reviews
+// -----------------------------------------------------------------------------
+export async function getDailyReview(supabase: SupabaseClient) {
+  const [overview, academic] = await Promise.all([getManagementOverview(supabase), getAcademicIntelligence(supabase)]);
+  const subjectsNeedingAttention = academic.rows.filter((row) => row.status === "WARNING" || row.status === "CRITICAL");
+  const evaluableAcademic = academic.rows.filter((row) => row.dataCoverage !== "NOT_RECORDED");
+  return {
+    overview,
+    subjectsNeedingAttention,
+    academicDeliveryCoverage: academic.rows.length > 0 ? Math.round((evaluableAcademic.length / academic.rows.length) * 10_000) / 100 : null,
+  };
+}
+
+export async function getWeeklyReview(supabase: SupabaseClient) {
+  const today = todayInSchoolTimezone();
+  const weekStart = addDays(today, -6);
+  const [attendance, academic, fees, alertSummary, newAlerts] = await Promise.all([
+    getAttendanceIntelligence(supabase, { start: weekStart, end: today }),
+    getAcademicIntelligence(supabase, { end: today }),
+    getFeeIntelligence(supabase),
+    repo.getAlertSummary(supabase, weekStart, today),
+    repo.countAlertsFirstDetected(supabase, weekStart, today),
+  ]);
+  return {
+    periodStart: weekStart,
+    periodEnd: today,
+    attendance,
+    academic,
+    fees,
+    subjectsBehind: academic.rows.filter((row) => row.status === "WARNING" || row.status === "CRITICAL"),
+    newAlerts,
+    resolvedAlerts: alertSummary.resolvedThisPeriod,
+  };
+}
+
+export async function getMonthlyReview(supabase: SupabaseClient) {
+  const today = todayInSchoolTimezone();
+  const monthStart = startOfMonth(today);
+  const [attendance, performance, fees, alertSummary, activeAlerts] = await Promise.all([
+    getAttendanceIntelligence(supabase, { start: monthStart, end: today }),
+    getPerformanceIntelligence(supabase),
+    getFeeIntelligence(supabase),
+    repo.getAlertSummary(supabase, monthStart, today),
+    repo.listAlerts(supabase, { statuses: ["OPEN", "ACKNOWLEDGED"], pageSize: 500 }),
+  ]);
+  const students = performance.insights;
+  const topPerformers = [...students]
+    .filter((row) => row.classRank !== null)
+    .sort((a, b) => (a.classRank ?? 0) - (b.classRank ?? 0))
+    .slice(0, 10);
+  const activeAlertCountByStudent = new Map<string, number>();
+  for (const alert of activeAlerts.rows) {
+    if (!alert.student_id) continue;
+    activeAlertCountByStudent.set(alert.student_id, (activeAlertCountByStudent.get(alert.student_id) ?? 0) + 1);
+  }
+  const performanceByStudent = new Map(performance.insights.map((row) => [row.studentId, row]));
+  const studentReview = attendance.studentInsights.map((row) => {
+    const performanceRow = performanceByStudent.get(row.studentId) ?? null;
+    return {
+      studentId: row.studentId,
+      studentName: row.studentName,
+      className: row.className,
+      sectionName: row.sectionName,
+      attendancePercentage: row.attendancePercentage,
+      attendanceTrend: row.trend,
+      currentPerformance: performanceRow?.latestPercentage ?? null,
+      previousPerformance: performanceRow?.previousPercentage ?? null,
+      performanceDifference: performanceRow?.differencePoints ?? null,
+      performanceTrend: performanceRow?.trend ?? "INSUFFICIENT_DATA",
+      subjectsRequiringAttention: performanceRow?.subjectsRequiringAttention.length ?? 0,
+      classRank: performanceRow?.classRank ?? null,
+      activeAlerts: activeAlertCountByStudent.get(row.studentId) ?? 0,
+    };
+  });
+  return {
+    periodStart: monthStart,
+    periodEnd: today,
+    attendance,
+    performance,
+    fees,
+    improvingStudents: students.filter((row) => row.trend === "IMPROVING" || row.trend === "STRONGLY_IMPROVING"),
+    decliningStudents: students.filter((row) => row.trend === "DECLINING" || row.trend === "STRONGLY_DECLINING"),
+    requiresAttention: students.filter((row) => row.requiresAttention),
+    topPerformers,
+    classPerformance: performance.classSummary,
+    alertSummary,
+    studentReview,
+    healthScoreTrendMessage: "Health Score trend requires historical daily snapshots, which are not yet collected. Insufficient Data.",
+  };
 }
