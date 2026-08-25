@@ -10,6 +10,8 @@ Before modifying this repository:
 6. Never bypass Supabase RLS
 7. Do not introduce multi-school architecture unless explicitly requested
 8. Do not modify database migrations unless the assigned task requires it
+9. Use `https://prismschoolsdev.netlify.app/` as the canonical deployed URL for all current validation, QA, and deployment verification.
+10. Treat older Netlify URLs mentioned in historical project notes as superseded for current validation unless the user explicitly asks to validate them.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
