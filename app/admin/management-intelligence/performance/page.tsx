@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
-import { getPerformanceIntelligence, listAcademicYears, listClassesAndSections } from "@/features/management-intelligence/service";
+import { getPerformanceIntelligence, listAcademicYears, listClassesAndSections, listStudentOptions } from "@/features/management-intelligence/service";
 import { MetricCard } from "@/features/management-intelligence/components/metric-card";
 import type { PerformanceTrendStatus } from "@/features/management-intelligence/types";
 
@@ -54,9 +54,12 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
     listAcademicYears(supabase),
     listClassesAndSections(supabase),
   ]);
+  // Student options respect the same academic year + class/section scope
+  // currently in view, per the filter completeness requirement.
+  const studentOptions = await listStudentOptions(supabase, analytics.academicYear?.id, params.class_id, params.section_id);
 
   const insights = analytics.insights;
-  const evaluated = insights.filter((s) => s.latestPercentage !== null);
+  const evaluated = insights.filter((s) => s.latestOverallPercentage !== null);
   const countTrend = (trend: PerformanceTrendStatus) => insights.filter((s) => s.trend === trend).length;
   const coverage = insights.length > 0 ? Math.round((evaluated.length / insights.length) * 10_000) / 100 : null;
   const requiresAttention = insights.filter((s) => s.requiresAttention);
@@ -106,6 +109,8 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
           <label className="text-xs font-medium text-slate-600">Exam<select name="exam_id" defaultValue={analytics.selectedExam?.id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm">{(analytics.exams ?? []).map((exam) => <option key={exam.id} value={exam.id}>{exam.name}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Class<select name="class_id" defaultValue={params.class_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All classes</option>{academics.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Section<select name="section_id" defaultValue={params.section_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All sections</option>{academics.sections.filter((s) => !params.class_id || s.class_id === params.class_id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-600">Subject<select name="subject_id" defaultValue={params.subject_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All subjects</option>{(analytics.subjects ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-600">Student<select name="student_id" defaultValue={params.student_id ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All students</option>{studentOptions.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.admissionNo}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Trend<select name="trend" defaultValue={params.trend ?? ""} className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"><option value="">All</option><option value="STRONGLY_IMPROVING">Strongly Improving</option><option value="IMPROVING">Improving</option><option value="STABLE">Stable</option><option value="DECLINING">Declining</option><option value="STRONGLY_DECLINING">Strongly Declining</option><option value="INSUFFICIENT_DATA">Insufficient Data</option></select></label>
           <Button type="submit" className="self-end">Apply filters</Button>
         </form>
@@ -116,7 +121,7 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
         <CardContent>
           {topPerformers.length ? (
             <Table><THead><TR><TH>Rank</TH><TH>Student</TH><TH>Class</TH><TH>Percentage</TH></TR></THead><TBody>
-              {topPerformers.map((s) => <TR key={s.studentId}><TD>{s.classRank}</TD><TD><Link href={`/admin/students/${s.studentId}`} className="font-medium text-slate-900 hover:underline">{s.studentName}</Link></TD><TD>{s.className} · {s.sectionName}</TD><TD>{s.latestPercentage}%</TD></TR>)}
+              {topPerformers.map((s) => <TR key={s.studentId}><TD>{s.classRank}</TD><TD><Link href={`/admin/students/${s.studentId}`} className="font-medium text-slate-900 hover:underline">{s.studentName}</Link></TD><TD>{s.className} · {s.sectionName}</TD><TD>{s.latestOverallPercentage}%</TD></TR>)}
             </TBody></Table>
           ) : <p className="text-sm text-slate-500">No evaluated results in this scope yet.</p>}
         </CardContent>
@@ -157,19 +162,30 @@ export default async function PerformanceIntelligencePage({ searchParams }: { se
         </CardContent>
       </Card>
 
-      <Table><THead><TR><TH>Student</TH><TH>Class</TH><TH>Latest %</TH><TH>Previous %</TH><TH>Trend</TH><TH>Class Rank</TH><TH>Failed Subjects</TH></TR></THead><TBody>
+      <p className="text-xs text-slate-400">
+        &quot;Latest Overall&quot; is the student&apos;s full average this exam. &quot;Comparable&quot; shows only the subjects common to both exams — the actual
+        basis the Trend is computed from, which can differ from Latest Overall when the exams don&apos;t share the exact same subject set.
+      </p>
+      <Table><THead><TR><TH>Student</TH><TH>Class</TH><TH>Latest Overall</TH><TH>Comparable (Current → Previous)</TH><TH>Difference</TH><TH>Trend</TH><TH>Class Rank</TH><TH>Failed Subjects</TH></TR></THead><TBody>
         {analytics.pageInsights.map((s) => (
           <TR key={s.studentId} className={s.studentId === params.student_id ? "bg-blue-50" : undefined}>
             <TD><Link href={`/admin/students/${s.studentId}`} className="font-medium text-slate-900 hover:underline">{s.studentName}</Link><p className="text-xs text-slate-400">{s.admissionNo}</p></TD>
             <TD>{s.className} · {s.sectionName}</TD>
-            <TD>{s.latestPercentage === null ? <span className="text-slate-400">Not Evaluated</span> : `${s.latestPercentage}%`}</TD>
-            <TD>{s.previousPercentage === null ? <span className="text-slate-400">Insufficient Data</span> : `${s.previousPercentage}%`}</TD>
+            <TD>{s.latestOverallPercentage === null ? <span className="text-slate-400">Not Evaluated</span> : `${s.latestOverallPercentage}%`}</TD>
+            <TD>
+              {s.currentComparablePercentage === null || s.previousComparablePercentage === null ? (
+                <span className="text-slate-400">Insufficient Data</span>
+              ) : (
+                `${s.currentComparablePercentage}% → ${s.previousComparablePercentage}%`
+              )}
+            </TD>
+            <TD>{s.differencePoints ?? <span className="text-slate-400">—</span>}</TD>
             <TD><Badge className={TREND_BADGE[s.trend]}>{s.trend.replace(/_/g, " ")}</Badge></TD>
             <TD>{s.classRank ?? "—"}</TD>
             <TD>{s.failedSubjects.length ? s.failedSubjects.join(", ") : "—"}</TD>
           </TR>
         ))}
-        {!analytics.pageInsights.length && <TR><TD colSpan={7} className="py-8 text-center text-slate-500">No students match these filters, or no published results exist yet.</TD></TR>}
+        {!analytics.pageInsights.length && <TR><TD colSpan={8} className="py-8 text-center text-slate-500">No students match these filters, or no published results exist yet.</TD></TR>}
       </TBody></Table>
       <div className="flex items-center justify-between text-sm text-slate-500">
         <span>{analytics.totalCount} students · page {analytics.page}{analytics.totalCount !== insights.length ? ` (ranked within ${insights.length} matching the current filters)` : ""}</span>

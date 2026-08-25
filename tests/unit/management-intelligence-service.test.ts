@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   alertDestination,
   getManagementOverview,
+  getPerformanceIntelligence,
   hasAcademicResolutionEvidence,
   hasAttendanceResolutionEvidence,
   hasPerformanceResolutionEvidence,
@@ -32,7 +33,7 @@ function student(values: Partial<StudentInsight> = {}): StudentInsight {
 
 function staff(values: Partial<StaffInsight> = {}): StaffInsight {
   return {
-    staffId: "staff-1", staffNo: "STF-1", staffName: "Test Staff", presentDays: 0, recordedWorkingDays: 3,
+    staffId: "staff-1", staffNo: "STF-1", staffName: "Test Staff", presentDays: 0, recordedWorkingDays: 3, expectedWorkingDays: 3,
     attendancePercentage: 0, consecutiveAbsenceDays: 3, latestRecordedAttendanceEvaluation: "ABSENT", severity: "WARNING", ...values,
   };
 }
@@ -81,11 +82,11 @@ describe("phase 2b: academic alert auto-resolution requires positive evidence", 
 });
 
 describe("phase 2b: performance alert auto-resolution requires newer comparable evidence", () => {
-  function insight(values: Partial<StudentPerformanceInsight> = {}): Pick<StudentPerformanceInsight, "latestPercentage" | "trend" | "failedSubjects" | "subjectsRequiringAttention"> {
-    return { latestPercentage: 80, trend: "STABLE", failedSubjects: [], subjectsRequiringAttention: [], ...values };
+  function insight(values: Partial<StudentPerformanceInsight> = {}): Pick<StudentPerformanceInsight, "latestOverallPercentage" | "trend" | "failedSubjects" | "subjectsRequiringAttention"> {
+    return { latestOverallPercentage: 80, trend: "STABLE", failedSubjects: [], subjectsRequiringAttention: [], ...values };
   }
   it("does not resolve a decline alert when the student has no evaluated result in the newer exam", () => {
-    expect(hasPerformanceResolutionEvidence("student_performance_decline", insight({ latestPercentage: null }))).toBe(false);
+    expect(hasPerformanceResolutionEvidence("student_performance_decline", insight({ latestOverallPercentage: null }))).toBe(false);
   });
   it("does not resolve a decline alert on INSUFFICIENT_DATA — missing data is not recovery", () => {
     expect(hasPerformanceResolutionEvidence("student_performance_decline", insight({ trend: "INSUFFICIENT_DATA" }))).toBe(false);
@@ -99,7 +100,7 @@ describe("phase 2b: performance alert auto-resolution requires newer comparable 
     expect(hasPerformanceResolutionEvidence("student_performance_decline", insight({ trend: "IMPROVING" }))).toBe(true);
   });
   it("resolves a failed-subjects alert only once evaluated with no failures", () => {
-    expect(hasPerformanceResolutionEvidence("failed_subjects", insight({ latestPercentage: null, failedSubjects: [] }))).toBe(false);
+    expect(hasPerformanceResolutionEvidence("failed_subjects", insight({ latestOverallPercentage: null, failedSubjects: [] }))).toBe(false);
     expect(hasPerformanceResolutionEvidence("failed_subjects", insight({ failedSubjects: ["Math"] }))).toBe(false);
     expect(hasPerformanceResolutionEvidence("failed_subjects", insight({ failedSubjects: [] }))).toBe(true);
   });
@@ -209,6 +210,89 @@ describe("phase 2b: attendance coverage is scoped to the active roster", () => {
     expect(overview.todayIsWorkingDay).toBe(false);
     expect(overview.students.coverageToday.status).toBe("NOT_EXPECTED");
     expect(overview.students.coverageToday.missingCount).toBe(0);
+  });
+});
+
+describe("phase 2c: Term filter never hides a valid comparator in another term", () => {
+  // A filter-aware fake client: unlike a canned-per-table mock, this one
+  // actually applies .eq/.in against the table's rows, which matters here
+  // because listResultsForSchedules is called twice with different id sets
+  // and must return different rows each time.
+  function filterAwareSupabase(tables: Record<string, Record<string, unknown>[]>): SupabaseClient {
+    function builder(table: string) {
+      let rows = tables[table] ?? [];
+      const chain: Record<string, unknown> = {};
+      chain.select = () => chain;
+      chain.order = () => chain;
+      chain.eq = (col: string, val: unknown) => {
+        if (col.includes(".")) return chain; // nested Postgrest embed filters (e.g. "students.status") are pre-baked into fixtures
+        rows = rows.filter((r) => r[col] === val);
+        return chain;
+      };
+      chain.in = (col: string, vals: unknown[]) => {
+        rows = rows.filter((r) => vals.includes(r[col]));
+        return chain;
+      };
+      chain.gte = () => chain;
+      chain.lte = () => chain;
+      chain.maybeSingle = () => Promise.resolve({ data: rows[0] ?? null, error: null });
+      chain.then = (resolve: (value: { data: unknown; error: null; count: number }) => unknown) =>
+        resolve({ data: rows, error: null, count: rows.length });
+      return chain;
+    }
+    return { from: (table: string) => builder(table) } as unknown as SupabaseClient;
+  }
+
+  function buildFixture() {
+    return {
+      academic_years: [{ id: "year-1", year_label: "2026-27", start_date: "2026-01-01", end_date: "2026-12-31", is_current: true }],
+      exam_terms: [
+        { id: "term-1", academic_year_id: "year-1", name: "Term 1" },
+        { id: "term-2", academic_year_id: "year-1", name: "Term 2" },
+      ],
+      exams: [
+        { id: "exam-1", term_id: "term-1", name: "Term Exam #1", description: null, status: "completed", comparison_group: "Term Exams", sequence_no: 1, created_at: "2026-01-15", updated_at: "", created_by: null, updated_by: null },
+        { id: "exam-2", term_id: "term-2", name: "Term Exam #2", description: null, status: "completed", comparison_group: "Term Exams", sequence_no: 2, created_at: "2026-06-15", updated_at: "", created_by: null, updated_by: null },
+      ],
+      exam_schedules: [
+        { id: "sched-1", exam_id: "exam-1", class_id: "class-1", subject_id: "subject-math", exam_date: "2026-01-20", start_time: "09:00", end_time: "10:00", room_no: null, max_marks_theory: 100, max_marks_practical: 0, pass_marks: 33, result_status: "published", created_at: "", updated_at: "", created_by: null, updated_by: null },
+        { id: "sched-2", exam_id: "exam-2", class_id: "class-1", subject_id: "subject-math", exam_date: "2026-06-20", start_time: "09:00", end_time: "10:00", room_no: null, max_marks_theory: 100, max_marks_practical: 0, pass_marks: 33, result_status: "published", created_at: "", updated_at: "", created_by: null, updated_by: null },
+      ],
+      exam_results: [
+        { id: "res-1", exam_schedule_id: "sched-1", student_id: "student-1", marks_theory: 70, marks_practical: null, attendance_status: "present", note: null, created_at: "", updated_at: "", created_by: null, updated_by: null },
+        { id: "res-2", exam_schedule_id: "sched-2", student_id: "student-1", marks_theory: 80, marks_practical: null, attendance_status: "present", note: null, created_at: "", updated_at: "", created_by: null, updated_by: null },
+      ],
+      grade_scales: [{ id: "g1", grade_name: "Pass", min_percentage: 0, max_percentage: 100, grade_point: 0, description: null, created_at: "", updated_at: "", created_by: null, updated_by: null }],
+      management_intelligence_settings: [],
+      student_enrollments: [
+        {
+          student_id: "student-1",
+          academic_year_id: "year-1",
+          class_id: "class-1",
+          section_id: "section-1",
+          students: { admission_no: "A001", first_name: "Asha", last_name: "K", status: "active" },
+          classes: { name: "Class 1" },
+          sections: { name: "A" },
+        },
+      ],
+      subjects: [{ id: "subject-math", name: "Mathematics", class_id: "class-1", code: null, subject_type: "theory" }],
+    };
+  }
+
+  it("finds Term Exam #1 as the comparator for Term Exam #2 even when the Term filter is set to Term 2", async () => {
+    const supabase = filterAwareSupabase(buildFixture());
+    const result = await getPerformanceIntelligence(supabase, { termId: "term-2" });
+    expect(result.selectedExam?.id).toBe("exam-2");
+    expect(result.previousExam?.id).toBe("exam-1");
+    const student = result.insights.find((row) => row.studentId === "student-1");
+    expect(student?.previousComparablePercentage).toBe(70);
+    expect(student?.currentComparablePercentage).toBe(80);
+  });
+
+  it("still only lists Term 2's own exam as selectable when Term 2 is the filter", async () => {
+    const supabase = filterAwareSupabase(buildFixture());
+    const result = await getPerformanceIntelligence(supabase, { termId: "term-2" });
+    expect(result.exams.map((e) => e.id)).toEqual(["exam-2"]);
   });
 });
 

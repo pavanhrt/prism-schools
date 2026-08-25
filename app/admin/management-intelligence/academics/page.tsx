@@ -102,13 +102,13 @@ export default async function AcademicIntelligencePage({ searchParams }: { searc
         </form>
       </CardContent></Card>
 
-      <Table><THead><TR><TH>Class</TH><TH>Section</TH><TH>Subject</TH><TH>Teacher</TH><TH>Expected</TH><TH>Actual</TH><TH>Lag Days</TH><TH>Status</TH><TH>Data Coverage</TH></TR></THead><TBody>
+      <Table><THead><TR><TH>Class</TH><TH>Subject</TH><TH>Sections</TH><TH>Teachers</TH><TH>Expected</TH><TH>Actual</TH><TH>Lag Days</TH><TH>Status</TH><TH>Data Coverage</TH></TR></THead><TBody>
         {analytics.pageRows.map((row, index) => (
-          <TR key={`${row.classId}-${row.sectionId}-${row.subjectId}-${index}`}>
+          <TR key={`${row.classId}-${row.subjectId}-${index}`}>
             <TD>{row.className}</TD>
-            <TD>{row.sectionName}</TD>
             <TD>{row.subjectName}</TD>
-            <TD>{row.teacherName ?? <span className="text-slate-400">Unassigned</span>}</TD>
+            <TD>{row.assignedSections.length ? row.assignedSections.map((s) => s.sectionName).join(", ") : <span className="text-slate-400">None</span>}</TD>
+            <TD>{row.assignedTeachers.length ? row.assignedTeachers.map((t) => t.teacherName ?? "Unnamed").join(", ") : <span className="text-slate-400">Unassigned</span>}</TD>
             <TD>{row.expectedProgress}</TD>
             <TD>{row.actualProgress}</TD>
             <TD>{row.lagDays === null ? <span className="text-slate-400">—</span> : row.lagDays}</TD>

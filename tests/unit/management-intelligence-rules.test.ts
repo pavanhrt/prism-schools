@@ -5,17 +5,20 @@ import {
   attendanceTrend,
   buildWorkingDays,
   calculateAttendance,
+  computeAttendanceOpportunityCoverage,
   computeCoverage,
   computeDailyCoverage,
   computeHealthScore,
   consecutiveAbsenceDays,
   coverageStatus,
   denseRankByScore,
+  expectedWorkingDaysExcludingLeave,
   feeCollectionRateBelowThreshold,
   feeCollectionRateRecovered,
   feeOverdueSeverity,
   healthLabel,
   isAlertTransitionAllowed,
+  isDateCoveredByApprovedLeave,
   latestRecordedAttendanceEvaluation,
   lowAttendanceSeverity,
   newestWorkingDayEvaluation,
@@ -173,6 +176,50 @@ describe("management intelligence phase 2b: fee collection-rate warning", () => 
     expect(feeCollectionRateRecovered("COMPLETE", 59.9, 60)).toBe(false);
     expect(feeCollectionRateRecovered("COMPLETE", 60, 60)).toBe(true);
     expect(feeCollectionRateRecovered("COMPLETE", 75, 60)).toBe(true);
+  });
+});
+
+describe("phase 2c: opportunity-based attendance health coverage", () => {
+  it("is 5% for 200 students × 20 working days with only 200 total records — not 100%", () => {
+    // A per-student "has at least one record" check would wrongly read this as 100%.
+    expect(computeAttendanceOpportunityCoverage(200 * 20, 200)).toBe(5);
+  });
+  it("is 100% when every opportunity is recorded", () => {
+    expect(computeAttendanceOpportunityCoverage(4000, 4000)).toBe(100);
+  });
+  it("has no denominator when there are no expected opportunities", () => {
+    expect(computeAttendanceOpportunityCoverage(0, 0)).toBe(0);
+  });
+  it("caps at 100% defensively even if recorded somehow exceeds expected", () => {
+    expect(computeAttendanceOpportunityCoverage(100, 150)).toBe(100);
+  });
+});
+
+describe("phase 2c: staff expected-opportunity denominator excludes approved leave", () => {
+  const twentyWorkingDays = Array.from({ length: 20 }, (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`);
+
+  it("excludes exactly the leave-covered days from the expected denominator", () => {
+    const leave = [{ staff_id: "staff-1", start_date: "2026-08-01", end_date: "2026-08-05" }]; // 5 days
+    expect(expectedWorkingDaysExcludingLeave(twentyWorkingDays, "staff-1", leave)).toBe(15);
+  });
+  it("does not reduce the denominator for a staff member with no leave", () => {
+    const leave = [{ staff_id: "staff-1", start_date: "2026-08-01", end_date: "2026-08-05" }];
+    expect(expectedWorkingDaysExcludingLeave(twentyWorkingDays, "staff-2", leave)).toBe(20);
+  });
+  it("computes the correct total expected opportunities for 10 staff with 2 on 5-day leave each", () => {
+    const leave = [
+      { staff_id: "staff-1", start_date: "2026-08-01", end_date: "2026-08-05" },
+      { staff_id: "staff-2", start_date: "2026-08-01", end_date: "2026-08-05" },
+    ];
+    const staffIds = Array.from({ length: 10 }, (_, i) => `staff-${i + 1}`);
+    const totalExpected = staffIds.reduce((sum, id) => sum + expectedWorkingDaysExcludingLeave(twentyWorkingDays, id, leave), 0);
+    expect(totalExpected).toBe(190); // (10 × 20) − (2 × 5)
+  });
+  it("confirms the leave-day check itself is inclusive of both range endpoints", () => {
+    const leave = [{ staff_id: "staff-1", start_date: "2026-08-01", end_date: "2026-08-05" }];
+    expect(isDateCoveredByApprovedLeave("staff-1", "2026-08-01", leave)).toBe(true);
+    expect(isDateCoveredByApprovedLeave("staff-1", "2026-08-05", leave)).toBe(true);
+    expect(isDateCoveredByApprovedLeave("staff-1", "2026-08-06", leave)).toBe(false);
   });
 });
 

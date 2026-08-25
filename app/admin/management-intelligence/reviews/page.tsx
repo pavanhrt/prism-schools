@@ -37,7 +37,7 @@ export default async function ManagementReviewsPage() {
           <CardContent>
             {daily.subjectsNeedingAttention.length ? (
               <ul className="flex flex-col gap-1 text-sm text-slate-700">
-                {daily.subjectsNeedingAttention.map((row, i) => <li key={i}>{row.subjectName} ({row.className} {row.sectionName}) — <Badge className={row.status === "CRITICAL" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>{row.status.replace(/_/g, " ")}</Badge>, {row.lagDays} days behind</li>)}
+                {daily.subjectsNeedingAttention.map((row, i) => <li key={i}>{row.subjectName} ({row.className}) — <Badge className={row.status === "CRITICAL" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>{row.status.replace(/_/g, " ")}</Badge>, {row.lagDays} days behind</li>)}
               </ul>
             ) : <p className="text-sm text-slate-500">No subjects are currently behind plan.</p>}
             <p className="mt-3 text-xs text-slate-400">Operational issues are tracked in the <Link href="/admin/management-intelligence/alerts?category=OPERATIONS" className="underline">Alert Center</Link>.</p>
@@ -58,7 +58,7 @@ export default async function ManagementReviewsPage() {
           <CardHeader><CardTitle>Subjects Behind Plan</CardTitle></CardHeader>
           <CardContent>
             <Table><THead><TR><TH>Class</TH><TH>Subject</TH><TH>Status</TH><TH>Lag Days</TH></TR></THead><TBody>
-              {weekly.subjectsBehind.map((row, i) => <TR key={i}><TD>{row.className} · {row.sectionName}</TD><TD>{row.subjectName}</TD><TD><Badge className={row.status === "CRITICAL" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>{row.status.replace(/_/g, " ")}</Badge></TD><TD>{row.lagDays}</TD></TR>)}
+              {weekly.subjectsBehind.map((row, i) => <TR key={i}><TD>{row.className}</TD><TD>{row.subjectName}</TD><TD><Badge className={row.status === "CRITICAL" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>{row.status.replace(/_/g, " ")}</Badge></TD><TD>{row.lagDays}</TD></TR>)}
               {!weekly.subjectsBehind.length && <TR><TD colSpan={4} className="py-6 text-center text-slate-500">No subjects behind plan this week.</TD></TR>}
             </TBody></Table>
           </CardContent>
@@ -86,7 +86,7 @@ export default async function ManagementReviewsPage() {
           <CardHeader><CardTitle>Top Performers</CardTitle></CardHeader>
           <CardContent>
             <Table><THead><TR><TH>Rank</TH><TH>Student</TH><TH>Class</TH><TH>Percentage</TH></TR></THead><TBody>
-              {monthly.topPerformers.map((s) => <TR key={s.studentId}><TD>{s.classRank}</TD><TD><Link href={`/admin/students/${s.studentId}`} className="font-medium text-slate-900 hover:underline">{s.studentName}</Link></TD><TD>{s.className} · {s.sectionName}</TD><TD>{s.latestPercentage}%</TD></TR>)}
+              {monthly.topPerformers.map((s) => <TR key={s.studentId}><TD>{s.classRank}</TD><TD><Link href={`/admin/students/${s.studentId}`} className="font-medium text-slate-900 hover:underline">{s.studentName}</Link></TD><TD>{s.className} · {s.sectionName}</TD><TD>{s.latestOverallPercentage}%</TD></TR>)}
               {!monthly.topPerformers.length && <TR><TD colSpan={4} className="py-6 text-center text-slate-500">No ranked results yet.</TD></TR>}
             </TBody></Table>
           </CardContent>
@@ -103,7 +103,7 @@ export default async function ManagementReviewsPage() {
         <Card>
           <CardHeader><CardTitle>Monthly Student Review</CardTitle></CardHeader>
           <CardContent>
-            <Table><THead><TR><TH>Student</TH><TH>Class</TH><TH>Attendance</TH><TH>Att. Trend</TH><TH>Current %</TH><TH>Previous %</TH><TH>Difference</TH><TH>Perf. Trend</TH><TH>Attention</TH><TH>Rank</TH><TH>Active Alerts</TH></TR></THead><TBody>
+            <Table><THead><TR><TH>Student</TH><TH>Class</TH><TH>Attendance</TH><TH>Att. Trend</TH><TH>Latest Overall</TH><TH>Comparable %</TH><TH>Previous %</TH><TH>Difference</TH><TH>Perf. Trend</TH><TH>Attention</TH><TH>Rank</TH><TH>Active Alerts</TH></TR></THead><TBody>
               {monthly.studentReview.map((row) => (
                 <TR key={row.studentId}>
                   <TD><Link href={`/admin/students/${row.studentId}`} className="font-medium text-slate-900 hover:underline">{row.studentName}</Link></TD>
@@ -111,6 +111,7 @@ export default async function ManagementReviewsPage() {
                   <TD>{row.attendancePercentage === null ? "Insufficient Data" : `${row.attendancePercentage}%`}</TD>
                   <TD>{row.attendanceTrend.replace(/_/g, " ")}</TD>
                   <TD>{row.currentPerformance === null ? "Not Evaluated" : `${row.currentPerformance}%`}</TD>
+                  <TD>{row.currentComparablePerformance === null ? <span className="text-slate-400">Insufficient Data</span> : `${row.currentComparablePerformance}%`}</TD>
                   <TD>{row.previousPerformance === null ? "Insufficient Data" : `${row.previousPerformance}%`}</TD>
                   <TD>{row.performanceDifference ?? "—"}</TD>
                   <TD>{row.performanceTrend.replace(/_/g, " ")}</TD>
@@ -119,7 +120,7 @@ export default async function ManagementReviewsPage() {
                   <TD>{row.activeAlerts}</TD>
                 </TR>
               ))}
-              {!monthly.studentReview.length && <TR><TD colSpan={11} className="py-8 text-center text-slate-500">No active students this academic year.</TD></TR>}
+              {!monthly.studentReview.length && <TR><TD colSpan={12} className="py-8 text-center text-slate-500">No active students this academic year.</TD></TR>}
             </TBody></Table>
           </CardContent>
         </Card>

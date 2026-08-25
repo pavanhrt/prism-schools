@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectPreviousComparableExam, summarizeClassPerformance, summarizeStudentPerformance } from "@/features/management-intelligence/performance";
+import { isNewerComparableExam, selectPreviousComparableExam, summarizeClassPerformance, summarizeStudentPerformance } from "@/features/management-intelligence/performance";
 import type { GradeScale } from "@/types/exams";
 
 const gradeScales: GradeScale[] = [
@@ -37,8 +37,8 @@ describe("performance: exam comparability", () => {
       strongChangePoints: 10,
       attentionScorePct: 40,
     });
-    expect(result.latestPercentage).toBe(80);
-    expect(result.previousPercentage).toBeNull();
+    expect(result.latestOverallPercentage).toBe(80);
+    expect(result.previousComparablePercentage).toBeNull();
     expect(result.trend).toBe("INSUFFICIENT_DATA");
   });
 
@@ -54,7 +54,7 @@ describe("performance: exam comparability", () => {
       strongChangePoints: 10,
       attentionScorePct: 40,
     });
-    expect(result.latestPercentage).toBeNull();
+    expect(result.latestOverallPercentage).toBeNull();
     expect(result.dataCoverage).toBe("NOT_RECORDED");
     expect(result.latestExamId).toBeNull();
   });
@@ -71,8 +71,8 @@ describe("performance: exam comparability", () => {
       strongChangePoints: 10,
       attentionScorePct: 40,
     });
-    expect(result.latestPercentage).toBe(61);
-    expect(result.previousPercentage).toBe(76);
+    expect(result.latestOverallPercentage).toBe(61);
+    expect(result.previousComparablePercentage).toBe(76);
     expect(result.differencePoints).toBe(-15);
     expect(result.trend).toBe("STRONGLY_DECLINING");
     expect(result.subjects[0].trend.status).toBe("STRONGLY_DECLINING");
@@ -154,6 +154,41 @@ describe("phase 2b: explicit exam comparability (never inferred)", () => {
   });
 });
 
+describe("phase 2c: performance alert recovery identity (isNewerComparableExam)", () => {
+  it("does not resolve: alert exam Term Exams #2, current exam Weekly Tests #3 (different comparison_group)", () => {
+    const alertExam = { id: "term-2", comparisonGroup: "Term Exams", sequenceNo: 2 };
+    const currentExam = { id: "weekly-3", comparisonGroup: "Weekly Tests", sequenceNo: 3 };
+    expect(isNewerComparableExam(alertExam, currentExam)).toBe(false);
+  });
+
+  it("resolves: alert exam Term Exams #2, current exam Term Exams #3 (same group, higher sequence)", () => {
+    const alertExam = { id: "term-2", comparisonGroup: "Term Exams", sequenceNo: 2 };
+    const currentExam = { id: "term-3", comparisonGroup: "Term Exams", sequenceNo: 3 };
+    expect(isNewerComparableExam(alertExam, currentExam)).toBe(true);
+  });
+
+  it("does not resolve: alert exam Term Exams #3, current exam Term Exams #2 (lower sequence)", () => {
+    const alertExam = { id: "term-3", comparisonGroup: "Term Exams", sequenceNo: 3 };
+    const currentExam = { id: "term-2", comparisonGroup: "Term Exams", sequenceNo: 2 };
+    expect(isNewerComparableExam(alertExam, currentExam)).toBe(false);
+  });
+
+  it("does not resolve on the same sequence number", () => {
+    const alertExam = { id: "term-2a", comparisonGroup: "Term Exams", sequenceNo: 2 };
+    const currentExam = { id: "term-2b", comparisonGroup: "Term Exams", sequenceNo: 2 };
+    expect(isNewerComparableExam(alertExam, currentExam)).toBe(false);
+  });
+
+  it("does not resolve when either exam is missing comparison metadata", () => {
+    expect(isNewerComparableExam({ id: "a", comparisonGroup: null, sequenceNo: null }, { id: "b", comparisonGroup: "Term Exams", sequenceNo: 2 })).toBe(false);
+    expect(isNewerComparableExam({ id: "a", comparisonGroup: "Term Exams", sequenceNo: 1 }, { id: "b", comparisonGroup: null, sequenceNo: null })).toBe(false);
+  });
+
+  it("does not resolve when the alert's original exam can no longer be found", () => {
+    expect(isNewerComparableExam(undefined, { id: "b", comparisonGroup: "Term Exams", sequenceNo: 2 })).toBe(false);
+  });
+});
+
 describe("phase 2b: consistent subject-basis overall trend", () => {
   it("restricts the previous-comparable average to subjects also present in the current exam", () => {
     const [result] = summarizeStudentPerformance({
@@ -169,12 +204,33 @@ describe("phase 2b: consistent subject-basis overall trend", () => {
       strongChangePoints: 10,
       attentionScorePct: 40,
     });
-    // previousPercentage must average only Math+Science (60), never include Social (90)
-    expect(result.previousPercentage).toBe(60);
-    // latestPercentage stays the full current-exam average (Math+Science = 70) — informational, not narrowed
-    expect(result.latestPercentage).toBe(70);
+    // previousComparablePercentage must average only Math+Science (60), never include Social (90)
+    expect(result.previousComparablePercentage).toBe(60);
+    expect(result.currentComparablePercentage).toBe(70);
+    // latestOverallPercentage stays the full current-exam average (Math+Science = 70) — informational, not narrowed
+    expect(result.latestOverallPercentage).toBe(70);
     expect(result.differencePoints).toBe(10);
     expect(result.trend).toBe("STRONGLY_IMPROVING");
+  });
+
+  it("phase 2c exact scenario: Latest Overall 60, Comparable Current/Previous 80, Trend STABLE — never a false Latest-vs-Previous mismatch", () => {
+    // Current: Math 80, Science 80, English 20. Previous: Math 80, Science 80 (no English).
+    const [result] = summarizeStudentPerformance({
+      roster: [roster[0]],
+      selectedExamId: "exam-2",
+      selectedExamName: "Term 2",
+      selectedExamResults: [subjectRow("s1", 80, "math"), subjectRow("s1", 80, "science"), subjectRow("s1", 20, "english")],
+      previousExamResults: [subjectRow("s1", 80, "math"), subjectRow("s1", 80, "science")],
+      gradeScales,
+      changePoints: 3,
+      strongChangePoints: 10,
+      attentionScorePct: 40,
+    });
+    expect(result.latestOverallPercentage).toBe(60);
+    expect(result.currentComparablePercentage).toBe(80);
+    expect(result.previousComparablePercentage).toBe(80);
+    expect(result.differencePoints).toBe(0);
+    expect(result.trend).toBe("STABLE");
   });
 
   it("is INSUFFICIENT_DATA when no subject is common to both exams", () => {
@@ -189,7 +245,7 @@ describe("phase 2b: consistent subject-basis overall trend", () => {
       strongChangePoints: 10,
       attentionScorePct: 40,
     });
-    expect(result.previousPercentage).toBeNull();
+    expect(result.previousComparablePercentage).toBeNull();
     expect(result.trend).toBe("INSUFFICIENT_DATA");
   });
 });

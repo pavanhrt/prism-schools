@@ -108,6 +108,11 @@ export interface StaffInsight {
   staffName: string;
   presentDays: number;
   recordedWorkingDays: number;
+  /** Working days in the period MINUS days covered by this staff member's
+   * approved leave — the true expected-opportunity denominator for
+   * coverage. Approved leave reduces what's expected, never counts as a
+   * gap or as absence. */
+  expectedWorkingDays: number;
   attendancePercentage: number | null;
   consecutiveAbsenceDays: number;
   latestRecordedAttendanceEvaluation: "ABSENT" | "NON_ABSENT" | "NOT_EVALUATED";
@@ -146,15 +151,14 @@ export interface SubjectDeliveryInsight {
   className: string;
   subjectId: string;
   subjectName: string;
-  teacherId: string | null;
-  teacherName: string | null;
-  sectionId: string | null;
-  sectionName: string | null;
-  /** lesson_plans has no section column — every progress/lag/coverage field
-   * below is evaluated at class+subject grain and shared identically across
-   * every section/teacher row for that class+subject. It is never
-   * section-specific or teacher-specific evidence, even though the row
-   * itself carries section/teacher context. */
+  /** Context only — every section/teacher assigned to this class+subject.
+   * lesson_plans has no section or teacher column, so there is exactly one
+   * evaluated unit per class+subject; these lists are never independently
+   * measured per entry. */
+  assignedSections: { sectionId: string; sectionName: string }[];
+  assignedTeachers: { teacherId: string; teacherName: string | null }[];
+  /** Every progress/lag/coverage field below is evaluated at class+subject
+   * grain — never section-specific or teacher-specific evidence. */
   progressEvidenceLevel: "CLASS_SUBJECT";
   scheduledSessions: number;
   evidencedSessions: number;
@@ -199,8 +203,18 @@ export interface StudentPerformanceInsight {
   sectionName: string;
   latestExamId: string | null;
   latestExamName: string | null;
-  latestPercentage: number | null;
-  previousPercentage: number | null;
+  /** Full average across every valid subject result in the selected exam —
+   * "how the student did this exam overall". Never narrowed by
+   * comparability; use currentComparablePercentage for the trend basis. */
+  latestOverallPercentage: number | null;
+  /** Average across only the subjects also validly evaluated in the
+   * previous comparable exam — the actual basis differencePoints/trend are
+   * computed from. Can differ from latestOverallPercentage when the current
+   * exam covers subjects the previous exam didn't. */
+  currentComparablePercentage: number | null;
+  /** Average across the same common-subject basis, from the previous
+   * comparable exam. Null when no comparable exam/subject exists. */
+  previousComparablePercentage: number | null;
   differencePoints: number | null;
   trend: PerformanceTrendStatus;
   subjects: SubjectPerformance[];

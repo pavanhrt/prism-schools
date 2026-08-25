@@ -6,11 +6,13 @@ import { requirePermission } from "@/lib/permissions";
 import * as service from "./service";
 import {
   enterMarksSchema,
+  examComparisonSchema,
   examScheduleSchema,
   examSchema,
   examTermSchema,
   gradeScaleSchema,
   type EnterMarksInput,
+  type ExamComparisonInput,
   type ExamInput,
   type ExamScheduleInput,
   type ExamTermInput,
@@ -47,6 +49,19 @@ export async function createExamAction(input: ExamInput): Promise<ActionResult> 
     return { ok: true };
   } catch (err) {
     return toResult(err, "Could not create exam.");
+  }
+}
+
+export async function updateExamComparisonAction(input: ExamComparisonInput): Promise<ActionResult> {
+  try {
+    await requirePermission("exams.create");
+    const parsed = examComparisonSchema.parse(input);
+    const supabase = await createClient();
+    await service.updateExamComparison(supabase, parsed);
+    revalidatePath("/admin/exams");
+    return { ok: true };
+  } catch (err) {
+    return toResult(err, "Could not update comparison metadata.");
   }
 }
 

@@ -40,11 +40,30 @@ export async function listExams(supabase: SupabaseClient): Promise<Exam[]> {
   return data;
 }
 
+export async function getExam(supabase: SupabaseClient, id: string): Promise<Exam | null> {
+  const { data, error } = await supabase.from("exams").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function insertExam(
   supabase: SupabaseClient,
   input: Pick<Exam, "term_id" | "name" | "description" | "comparison_group" | "sequence_no">,
 ): Promise<Exam> {
   const { data, error } = await supabase.from("exams").insert(input).select().single();
+  if (error) throw error;
+  return data;
+}
+
+/** Updates ONLY comparison_group/sequence_no on an existing exam — never
+ * touches name/description/term/status, and never touches marks or result
+ * lifecycle state. */
+export async function updateExamComparison(
+  supabase: SupabaseClient,
+  id: string,
+  value: Pick<Exam, "comparison_group" | "sequence_no">,
+): Promise<Exam> {
+  const { data, error } = await supabase.from("exams").update(value).eq("id", id).select().single();
   if (error) throw error;
   return data;
 }

@@ -5,24 +5,47 @@ export const examTermSchema = z.object({
   name: z.string().trim().min(1, "Term name is required").max(100),
 });
 
-export const examSchema = z
-  .object({
+// comparison_group and sequence_no must be supplied together or not at all
+// — a group without a sequence (or vice versa) can never be deterministically
+// ordered, so it's rejected rather than silently treated as "not comparable".
+function refineComparisonPair<T extends { comparison_group?: string; sequence_no?: string }>(schema: z.ZodType<T>) {
+  return schema
+    .refine((data) => !data.sequence_no || Number(data.sequence_no) >= 1, {
+      message: "Sequence must be 1 or greater",
+      path: ["sequence_no"],
+    })
+    .refine((data) => Boolean(data.comparison_group) === Boolean(data.sequence_no), {
+      message: "Comparison group and sequence must be supplied together, or both left blank",
+      path: ["sequence_no"],
+    });
+}
+
+const comparisonFields = {
+  comparison_group: z.string().trim().max(100).optional().or(z.literal("")),
+  sequence_no: z
+    .string()
+    .trim()
+    .regex(/^\d*$/, "Sequence must be a whole number")
+    .max(4)
+    .optional()
+    .or(z.literal("")),
+};
+
+export const examSchema = refineComparisonPair(
+  z.object({
     term_id: z.string().uuid("Choose a term"),
     name: z.string().trim().min(1, "Exam name is required").max(100),
     description: z.string().trim().max(2000).optional().or(z.literal("")),
-    comparison_group: z.string().trim().max(100).optional().or(z.literal("")),
-    sequence_no: z
-      .string()
-      .trim()
-      .regex(/^\d*$/, "Sequence must be a whole number")
-      .max(4)
-      .optional()
-      .or(z.literal("")),
-  })
-  .refine((data) => !data.sequence_no || Number(data.sequence_no) >= 1, {
-    message: "Sequence must be 1 or greater",
-    path: ["sequence_no"],
-  });
+    ...comparisonFields,
+  }),
+);
+
+export const examComparisonSchema = refineComparisonPair(
+  z.object({
+    id: z.string().uuid(),
+    ...comparisonFields,
+  }),
+);
 
 export const examScheduleSchema = z
   .object({
@@ -69,6 +92,7 @@ export const gradeScaleSchema = z
 
 export type ExamTermInput = z.infer<typeof examTermSchema>;
 export type ExamInput = z.infer<typeof examSchema>;
+export type ExamComparisonInput = z.infer<typeof examComparisonSchema>;
 export type ExamScheduleInput = z.infer<typeof examScheduleSchema>;
 export type EnterMarksInput = z.infer<typeof enterMarksSchema>;
 export type GradeScaleInput = z.infer<typeof gradeScaleSchema>;

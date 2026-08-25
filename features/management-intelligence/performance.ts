@@ -45,6 +45,23 @@ export function selectPreviousComparableExam<T extends ComparableExamCandidate>(
   return eligible.reduce((best, exam) => (exam.sequenceNo! > best.sequenceNo! ? exam : best));
 }
 
+/**
+ * Phase 2C: the same explicit-comparability rule, applied to alert
+ * auto-resolution — a NEWER exam only counts as recovery evidence for an
+ * alert if it is genuinely comparable to the exam the alert was raised
+ * against (same non-null comparison_group, strictly higher sequence_no).
+ * `alertExam` being unknown, either exam missing its comparison metadata,
+ * a different comparison_group, or a lower/equal sequence_no all mean
+ * "not comparable" — never auto-resolved.
+ */
+export function isNewerComparableExam(alertExam: ComparableExamCandidate | undefined, currentExam: ComparableExamCandidate): boolean {
+  if (!alertExam) return false;
+  if (currentExam.comparisonGroup === null || alertExam.comparisonGroup === null) return false;
+  if (alertExam.comparisonGroup !== currentExam.comparisonGroup) return false;
+  if (alertExam.sequenceNo === null || currentExam.sequenceNo === null) return false;
+  return currentExam.sequenceNo > alertExam.sequenceNo;
+}
+
 export interface PerformanceResultRow {
   studentId: string;
   subjectId: string;
@@ -145,18 +162,19 @@ export function summarizeStudentPerformance(params: {
         if (reasons.length) subjectsRequiringAttention.push({ subjectName: row.subjectName, reason: reasons.join(" ") });
       }
 
-      const latestPercentage = countPct > 0 ? Math.round((sumPct / countPct) * 100) / 100 : null;
+      const latestOverallPercentage = countPct > 0 ? Math.round((sumPct / countPct) * 100) / 100 : null;
 
-      // The overall trend must compare a consistent subject basis — never
+      // The overall TREND must compare a consistent subject basis — never
       // the current exam's full average against a previous average built
       // from a different subject set (e.g. previous exam also tested
       // Social, current exam didn't). Both sides of the trend comparison
       // are restricted to the intersection of subjects with a valid,
-      // evaluated result in BOTH exams. `previousPercentage` below is that
-      // intersection-basis previous average — i.e. "Previous Comparable %".
-      // `latestPercentage` above stays the full current-exam average
-      // (informational, "how the student did this exam overall") and is
-      // never itself narrowed by comparability.
+      // evaluated result in BOTH exams: `currentComparablePercentage` and
+      // `previousComparablePercentage`. `latestOverallPercentage` above
+      // stays the full current-exam average (informational, "how the
+      // student did this exam overall") and can legitimately differ from
+      // `currentComparablePercentage` — the UI must show both distinctly
+      // rather than implying the trend was computed from the overall figure.
       const evaluatedCurrentSubjectIds = new Set(rows.filter((row) => gradeOf(row) !== null).map((row) => row.subjectId));
       const commonSubjectIds = new Set(
         previousRows.filter((row) => gradeOf(row) !== null && evaluatedCurrentSubjectIds.has(row.subjectId)).map((row) => row.subjectId),
@@ -179,14 +197,14 @@ export function summarizeStudentPerformance(params: {
         currentBasisSum += grade.percentage;
         currentBasisCount += 1;
       }
-      const previousPercentage = previousCount > 0 ? Math.round((previousSum / previousCount) * 100) / 100 : null;
-      const currentPercentageForTrend = currentBasisCount > 0 ? Math.round((currentBasisSum / currentBasisCount) * 100) / 100 : null;
-      const overallTrend = performanceTrend(currentPercentageForTrend, previousPercentage, changePoints, strongChangePoints);
+      const previousComparablePercentage = previousCount > 0 ? Math.round((previousSum / previousCount) * 100) / 100 : null;
+      const currentComparablePercentage = currentBasisCount > 0 ? Math.round((currentBasisSum / currentBasisCount) * 100) / 100 : null;
+      const overallTrend = performanceTrend(currentComparablePercentage, previousComparablePercentage, changePoints, strongChangePoints);
 
       const attentionReasons: string[] = [];
       if (overallTrend.status === "DECLINING" || overallTrend.status === "STRONGLY_DECLINING") {
         attentionReasons.push(
-          `Overall performance (on the subjects common to both exams) changed from ${previousPercentage}% to ${currentPercentageForTrend}% (${overallTrend.differencePoints} percentage points).`,
+          `Overall performance (on the subjects common to both exams) changed from ${previousComparablePercentage}% to ${currentComparablePercentage}% (${overallTrend.differencePoints} percentage points).`,
         );
       }
       if (failedSubjects.length > 0) {
@@ -208,8 +226,9 @@ export function summarizeStudentPerformance(params: {
         sectionName: student.sectionName,
         latestExamId: countPct > 0 ? selectedExamId : null,
         latestExamName: countPct > 0 ? selectedExamName : null,
-        latestPercentage,
-        previousPercentage,
+        latestOverallPercentage,
+        currentComparablePercentage,
+        previousComparablePercentage,
         differencePoints: overallTrend.differencePoints,
         trend: overallTrend.status,
         subjects,
@@ -225,8 +244,8 @@ export function summarizeStudentPerformance(params: {
   const byClassSection = groupBy(withoutRank, (row) => `${row.classId}:${row.sectionId}`);
   const rankByStudentId = new Map<string, number>();
   for (const group of byClassSection.values()) {
-    const ranked = group.filter((row) => row.latestPercentage !== null);
-    const ranks = denseRankByScore(ranked.map((row) => row.latestPercentage!));
+    const ranked = group.filter((row) => row.latestOverallPercentage !== null);
+    const ranks = denseRankByScore(ranked.map((row) => row.latestOverallPercentage!));
     ranked.forEach((row, index) => rankByStudentId.set(row.studentId, ranks[index]));
   }
 
@@ -253,12 +272,12 @@ export function summarizeClassPerformance(insights: StudentPerformanceInsight[])
   );
   const result: ClassPerformanceGroup[] = [];
   for (const group of groups.values()) {
-    const scores = group.map((row) => row.latestPercentage).filter((value): value is number => value !== null);
+    const scores = group.map((row) => row.latestOverallPercentage).filter((value): value is number => value !== null);
     const sorted = [...scores].sort((a, b) => a - b);
     const median = sorted.length === 0 ? null : sorted.length % 2 === 1
       ? sorted[(sorted.length - 1) / 2]
       : Math.round(((sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) * 100) / 100;
-    const evaluated = group.filter((row) => row.latestPercentage !== null);
+    const evaluated = group.filter((row) => row.latestOverallPercentage !== null);
     const passCount = evaluated.filter((row) => row.failedSubjects.length === 0).length;
     result.push({
       classId: group[0].classId,

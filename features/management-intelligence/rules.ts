@@ -155,6 +155,28 @@ export function isDateCoveredByApprovedLeave(
   return leave.some((item) => item.staff_id === staffId && item.start_date <= date && item.end_date >= date);
 }
 
+/** Phase 2C: how many of a staff member's applicable working days are
+ * actually expected to be recorded — i.e. NOT covered by approved leave.
+ * Leave days must reduce the coverage denominator, never count as a gap. */
+export function expectedWorkingDaysExcludingLeave(
+  workingDays: string[],
+  staffId: string,
+  leave: { staff_id: string; start_date: string; end_date: string }[],
+): number {
+  return workingDays.filter((date) => !isDateCoveredByApprovedLeave(staffId, date, leave)).length;
+}
+
+/**
+ * Phase 2C: attendance data coverage as recorded OPPORTUNITIES, not "has at
+ * least one record". 200 students each with exactly one row out of 20
+ * working days is 5% coverage (200/4000), never 100% — a per-student binary
+ * check would badly overstate completeness at any real working-day count.
+ */
+export function computeAttendanceOpportunityCoverage(expectedOpportunities: number, recordedOpportunities: number): number {
+  if (expectedOpportunities <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((recordedOpportunities / expectedOpportunities) * 10_000) / 100));
+}
+
 export function alertRefreshDecision(priorStatus: string | null): "CREATE" | "UPDATE" | "REOPEN" {
   if (priorStatus === null) return "CREATE";
   if (priorStatus === "RESOLVED" || priorStatus === "DISMISSED") return "REOPEN";

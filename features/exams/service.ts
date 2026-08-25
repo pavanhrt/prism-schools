@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as repo from "./repository";
 import type {
   EnterMarksInput,
+  ExamComparisonInput,
   ExamInput,
   ExamScheduleInput,
   ExamTermInput,
@@ -11,6 +12,7 @@ import type { ResultStatus } from "@/types/exams";
 
 export const listExamTerms = repo.listExamTerms;
 export const listExams = repo.listExams;
+export const getExam = repo.getExam;
 export const listExamSchedules = repo.listExamSchedules;
 export const getExamSchedule = repo.getExamSchedule;
 export const listResultsForSchedule = repo.listResultsForSchedule;
@@ -24,14 +26,61 @@ export async function createExamTerm(supabase: SupabaseClient, input: ExamTermIn
   return repo.insertExamTerm(supabase, input);
 }
 
+/** No comparison_group + sequence_no can collide within the same academic
+ * year (exams don't carry academic_year_id directly — it's resolved via
+ * term_id → exam_terms.academic_year_id). Application-layer validation
+ * rather than a DB constraint: this metadata doesn't warrant a denormalized
+ * academic_year_id column or trigger on `exams` just to enforce it in SQL. */
+async function assertUniqueComparisonSequence(
+  supabase: SupabaseClient,
+  termId: string,
+  comparisonGroup: string,
+  sequenceNo: number,
+  excludeExamId: string | null,
+) {
+  const [terms, exams] = await Promise.all([repo.listExamTerms(supabase), repo.listExams(supabase)]);
+  const term = terms.find((t) => t.id === termId);
+  if (!term) return;
+  const yearTermIds = new Set(terms.filter((t) => t.academic_year_id === term.academic_year_id).map((t) => t.id));
+  const collision = exams.find(
+    (exam) =>
+      exam.id !== excludeExamId &&
+      yearTermIds.has(exam.term_id) &&
+      exam.comparison_group === comparisonGroup &&
+      exam.sequence_no === sequenceNo,
+  );
+  if (collision) {
+    throw new Error(`Sequence ${sequenceNo} is already used by "${collision.name}" in comparison group "${comparisonGroup}" for this academic year.`);
+  }
+}
+
 export async function createExam(supabase: SupabaseClient, input: ExamInput) {
+  const comparisonGroup = input.comparison_group || null;
+  const sequenceNo = input.sequence_no ? Number(input.sequence_no) : null;
+  if (comparisonGroup && sequenceNo) {
+    await assertUniqueComparisonSequence(supabase, input.term_id, comparisonGroup, sequenceNo, null);
+  }
   return repo.insertExam(supabase, {
     term_id: input.term_id,
     name: input.name,
     description: input.description || null,
-    comparison_group: input.comparison_group || null,
-    sequence_no: input.sequence_no ? Number(input.sequence_no) : null,
+    comparison_group: comparisonGroup,
+    sequence_no: sequenceNo,
   });
+}
+
+/** Updates ONLY comparison_group/sequence_no on an existing exam — never
+ * touches name/description/term/status, and never touches marks or the
+ * result-status lifecycle. */
+export async function updateExamComparison(supabase: SupabaseClient, input: ExamComparisonInput) {
+  const comparisonGroup = input.comparison_group || null;
+  const sequenceNo = input.sequence_no ? Number(input.sequence_no) : null;
+  if (comparisonGroup && sequenceNo) {
+    const exam = await repo.getExam(supabase, input.id);
+    if (!exam) throw new Error("Exam not found.");
+    await assertUniqueComparisonSequence(supabase, exam.term_id, comparisonGroup, sequenceNo, input.id);
+  }
+  return repo.updateExamComparison(supabase, input.id, { comparison_group: comparisonGroup, sequence_no: sequenceNo });
 }
 
 export async function createExamSchedule(supabase: SupabaseClient, input: ExamScheduleInput) {

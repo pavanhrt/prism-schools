@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { ComparisonEditor } from "./comparison-editor";
 
 export function ExamsManager({
   initialExams: exams,
@@ -111,7 +112,7 @@ export function ExamsManager({
               <TD>
                 <Badge variant="outline">{e.status}</Badge>
               </TD>
-              <TD className="text-sm text-slate-600">{e.comparison_group ? `${e.comparison_group} · #${e.sequence_no ?? "—"}` : <span className="text-slate-400">Not comparable</span>}</TD>
+              <TD><ComparisonEditor exam={e} canEdit={canCreate} /></TD>
               <TD>
                 <Link href={`/admin/exams/${e.id}`} className="text-sm text-slate-600 underline">
                   Manage schedules
