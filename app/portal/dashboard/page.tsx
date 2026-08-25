@@ -1,16 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/permissions";
-import { resolveActiveStudent } from "@/features/portal/service";
+import { resolveActiveStudent, getStudentAttendanceSummary } from "@/features/portal/service";
 import { listEnrollmentsForStudent } from "@/features/students/service";
-import { listAttendanceForStudent } from "@/features/attendance/service";
 import { listExamSchedules, listResultsForStudent } from "@/features/exams/service";
 import { listInvoices, listAllPayments } from "@/features/fees/service";
 import { computeInvoiceBalance } from "@/features/fees/balance";
 import { listNotices } from "@/features/communication/service";
-import { listClasses, listSections } from "@/features/academics/repository";
+import { listTimetable, listHomework } from "@/features/teaching/service";
+import { listClasses, listSections, listSubjects } from "@/features/academics/repository";
 import { StudentSwitcher } from "@/features/portal/components/student-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
 export default async function PortalDashboardPage({
   searchParams,
@@ -37,10 +39,9 @@ export default async function PortalDashboardPage({
     );
   }
 
-  const [enrollments, attendance, examSchedules, results, invoices, payments, notices, classes, sections] =
+  const [enrollments, examSchedules, results, invoices, payments, notices, classes, sections, subjects, attendanceSummary] =
     await Promise.all([
       listEnrollmentsForStudent(supabase, active.id),
-      listAttendanceForStudent(supabase, active.id),
       listExamSchedules(supabase),
       listResultsForStudent(supabase, active.id),
       listInvoices(supabase),
@@ -48,16 +49,32 @@ export default async function PortalDashboardPage({
       listNotices(supabase),
       listClasses(supabase),
       listSections(supabase),
+      listSubjects(supabase),
+      getStudentAttendanceSummary(supabase, active.id),
     ]);
 
   const currentEnrollment = enrollments.find((e) => e.is_current);
   const classById = new Map(classes.map((c) => [c.id, c.name]));
   const sectionById = new Map(sections.map((s) => [s.id, s.name]));
+  const subjectById = new Map(subjects.map((s) => [s.id, s.name]));
 
-  const presentCount = attendance.filter((a) => a.status === "present").length;
-  const attendancePct = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : null;
+  const [timetable, allHomework] = await Promise.all([
+    currentEnrollment ? listTimetable(supabase, currentEnrollment.class_id, currentEnrollment.section_id) : Promise.resolve([]),
+    listHomework(supabase),
+  ]);
+  const todayName = DAY_NAMES[new Date().getDay()];
+  const todaysClasses = timetable
+    .filter((t) => t.day_of_week === todayName)
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   const today = new Date().toISOString().slice(0, 10);
+  const todaysHomework = currentEnrollment
+    ? allHomework
+        .filter((h) => h.class_id === currentEnrollment.class_id && h.section_id === currentEnrollment.section_id && h.submission_date >= today)
+        .sort((a, b) => a.submission_date.localeCompare(b.submission_date))
+        .slice(0, 3)
+    : [];
+
   const upcomingExams = examSchedules
     .filter((s) => s.class_id === currentEnrollment?.class_id && s.exam_date >= today)
     .sort((a, b) => a.exam_date.localeCompare(b.exam_date))
@@ -86,21 +103,56 @@ export default async function PortalDashboardPage({
           <p className="text-sm text-slate-500">
             {active.admission_no}
             {currentEnrollment ? ` · ${classById.get(currentEnrollment.class_id) ?? ""} ${sectionById.get(currentEnrollment.section_id) ?? ""}` : ""}
+            {currentEnrollment?.roll_no ? ` · Roll ${currentEnrollment.roll_no}` : ""}
           </p>
         </div>
         <StudentSwitcher students={students} activeId={active.id} />
       </div>
 
+      {attendanceSummary.alert.level && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {attendanceSummary.alert.label}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <Card><CardContent className="pt-5">
           <p className="text-xs text-slate-500">Attendance</p>
-          <p className="text-xl font-semibold text-slate-900">{attendancePct !== null ? `${attendancePct}%` : "—"}</p>
+          <p className="text-xl font-semibold text-slate-900">
+            {attendanceSummary.breakdown.percentage !== null ? `${attendanceSummary.breakdown.percentage}%` : "—"}
+          </p>
         </CardContent></Card>
         <Card><CardContent className="pt-5">
           <p className="text-xs text-slate-500">Fee balance</p>
           <p className="text-xl font-semibold text-slate-900">₹{totalBalance.toFixed(2)}</p>
         </CardContent></Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Today&apos;s classes</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {todaysClasses.map((t) => (
+            <div key={t.id} className="flex justify-between text-sm">
+              <span className="text-slate-700">{subjectById.get(t.subject_id) ?? "—"}</span>
+              <span className="text-slate-500">{t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}</span>
+            </div>
+          ))}
+          {todaysClasses.length === 0 && <p className="text-sm text-slate-400">No classes scheduled today.</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Homework due</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {todaysHomework.map((h) => (
+            <div key={h.id} className="flex justify-between text-sm">
+              <span className="text-slate-700">{subjectById.get(h.subject_id) ?? "—"}</span>
+              <span className="text-slate-500">Due {h.submission_date}</span>
+            </div>
+          ))}
+          {todaysHomework.length === 0 && <p className="text-sm text-slate-400">Nothing due soon.</p>}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Upcoming exams</CardTitle></CardHeader>
@@ -129,7 +181,7 @@ export default async function PortalDashboardPage({
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Notices</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Announcements</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-2">
           {relevantNotices.map((n) => (
             <div key={n.id} className="text-sm">

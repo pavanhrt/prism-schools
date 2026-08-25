@@ -28,6 +28,10 @@ export default async function PortalFeesPage({
   ]);
   const invoices = allInvoices.filter((i) => i.student_id === active.id);
   const totalBalance = invoices.reduce((sum, inv) => sum + computeInvoiceBalance(inv, payments).balance, 0);
+  const nextDue = invoices
+    .filter((inv) => computeInvoiceBalance(inv, payments).balance > 0)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="flex flex-col gap-5">
@@ -36,12 +40,27 @@ export default async function PortalFeesPage({
         <StudentSwitcher students={students} activeId={active.id} />
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Total due</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-2xl font-semibold text-slate-900">₹{totalBalance.toFixed(2)}</p>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-2 gap-3">
+        <Card>
+          <CardHeader><CardTitle>Total due</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-slate-900">₹{totalBalance.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Next due date</CardTitle></CardHeader>
+          <CardContent>
+            {nextDue ? (
+              <>
+                <p className={`text-lg font-semibold ${nextDue.due_date < today ? "text-red-600" : "text-slate-900"}`}>{nextDue.due_date}</p>
+                <p className="text-xs text-slate-500">{nextDue.invoice_no}</p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-400">Nothing due.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="flex flex-col gap-3">
         {invoices.map((invoice) => {

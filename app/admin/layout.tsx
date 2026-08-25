@@ -20,6 +20,7 @@ const NAV: { href: string; label: string; permission: string | null }[] = [
   { href: "/admin/lesson-plans", label: "Lesson Plans", permission: "lesson_plans.view" },
   { href: "/admin/homework", label: "Homework", permission: "homework.view" },
   { href: "/admin/attendance", label: "Attendance", permission: "attendance.view" },
+  { href: "/admin/student-leave-requests", label: "Student Leave Requests", permission: "attendance.edit" },
   { href: "/admin/exams/terms", label: "Exam Terms", permission: "exams.view" },
   { href: "/admin/exams", label: "Exams", permission: "exams.view" },
   { href: "/admin/exams/grades", label: "Grade Scale", permission: "exams.view" },

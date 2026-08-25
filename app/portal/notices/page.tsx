@@ -12,7 +12,7 @@ export default async function PortalNoticesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-lg font-semibold text-slate-900">Notices</h1>
+      <h1 className="text-lg font-semibold text-slate-900">Announcements</h1>
       <div className="flex flex-col gap-3">
         {relevant.map((n) => (
           <Card key={n.id}>
