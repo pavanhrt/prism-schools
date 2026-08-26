@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,8 +12,10 @@ import {
 } from "@/validations/guardians";
 import {
   createGuardianAction,
-  linkGuardianPortalAction,
+  createParentLoginAction,
   linkStudentPortalAction,
+  sendParentPasswordResetAction,
+  setGuardianPortalAccessAction,
 } from "@/features/students/actions";
 import type { Guardian } from "@/types/guardians";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+type GuardianWithStatus = Guardian & { is_primary: boolean; portalStatus: "active" | "disabled" | null };
+
 export function GuardiansPanel({
   studentId,
   studentUserId,
@@ -29,7 +33,7 @@ export function GuardiansPanel({
 }: {
   studentId: string;
   studentUserId: string | null;
-  guardians: (Guardian & { is_primary: boolean })[];
+  guardians: GuardianWithStatus[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -129,23 +133,30 @@ function GuardianRow({
   studentId,
   onChanged,
 }: {
-  guardian: Guardian & { is_primary: boolean };
+  guardian: GuardianWithStatus;
   studentId: string;
   onChanged: () => void;
 }) {
-  const [linking, setLinking] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<LinkPortalAccountInput>({
-    resolver: zodResolver(linkPortalAccountSchema),
-  });
+  const [notice, setNotice] = useState<string | null>(null);
 
-  async function onLink(values: LinkPortalAccountInput) {
+  function run(
+    action: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>,
+    fallbackNotice?: string,
+  ) {
     setError(null);
-    const result = await linkGuardianPortalAction(guardian.id, studentId, values);
-    if (!result.ok) { setError(result.error); return; }
-    reset({ email: "" });
-    setLinking(false);
-    onChanged();
+    setNotice(null);
+    startTransition(async () => {
+      const result = await action();
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      const shown = "message" in result ? result.message : undefined;
+      if (shown ?? fallbackNotice) setNotice(shown ?? fallbackNotice!);
+      onChanged();
+    });
   }
 
   return (
@@ -156,21 +167,46 @@ function GuardianRow({
           <span className="text-sm text-slate-500 capitalize">({guardian.relationship})</span>
           {guardian.is_primary && <Badge variant="outline" className="ml-2">primary</Badge>}
         </div>
-        {guardian.user_id ? (
-          <Badge variant="success">linked</Badge>
-        ) : linking ? (
-          <form onSubmit={handleSubmit(onLink)} className="flex items-center gap-1">
-            <Input className="h-7 w-44 text-xs" type="email" placeholder="account email" {...register("email")} />
-            <Button size="sm" disabled={isSubmitting}>Link</Button>
-          </form>
+        {!guardian.user_id ? (
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => run(() => createParentLoginAction(guardian.id, studentId))}
+          >
+            Create Parent Login
+          </Button>
         ) : (
-          <button type="button" className="text-sm text-slate-500 underline" onClick={() => setLinking(true)}>
-            Link account
-          </button>
+          <div className="flex items-center gap-2">
+            <Badge variant={guardian.portalStatus === "disabled" ? "outline" : "success"}>
+              Portal Access: {guardian.portalStatus === "disabled" ? "Disabled" : "Active"}
+            </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={() => run(() => sendParentPasswordResetAction(guardian.id, studentId), "Password reset email sent.")}
+            >
+              Send Password Reset
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={() =>
+                run(
+                  () => setGuardianPortalAccessAction(guardian.id, studentId, guardian.portalStatus === "disabled"),
+                  guardian.portalStatus === "disabled" ? "Portal access enabled." : "Portal access disabled.",
+                )
+              }
+            >
+              {guardian.portalStatus === "disabled" ? "Enable Portal Access" : "Disable Portal Access"}
+            </Button>
+          </div>
         )}
       </div>
       <p className="text-xs text-slate-400">{guardian.phone}{guardian.email ? ` · ${guardian.email}` : ""}</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {notice && <p className="text-xs text-emerald-600">{notice}</p>}
     </div>
   );
 }

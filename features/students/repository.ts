@@ -92,6 +92,14 @@ export async function linkGuardianToStudent(
   if (error) throw error;
 }
 
+/** RPC, not a table write — user_roles/roles are roles.manage-gated by
+ * RLS, but this function is narrowly scoped to the fixed 'parent' role and
+ * self-checks students.edit inside the function body (0039 migration). */
+export async function assignParentRole(supabase: SupabaseClient, userId: string): Promise<void> {
+  const { error } = await supabase.rpc("assign_parent_role", { p_user_id: userId });
+  if (error) throw error;
+}
+
 export async function linkGuardianUser(
   supabase: SupabaseClient,
   guardianId: string,

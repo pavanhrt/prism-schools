@@ -31,6 +31,7 @@ export const linkStudentUser = repo.linkStudentUser;
 export const findUserIdForLinking = repo.findUserIdForLinking;
 export const listGuardiansForStudent = repo.listGuardiansForStudent;
 export const linkGuardianUser = repo.linkGuardianUser;
+export const assignParentRole = repo.assignParentRole;
 
 export async function createGuardianForStudent(
   supabase: SupabaseClient,

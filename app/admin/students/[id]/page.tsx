@@ -7,6 +7,7 @@ import {
 } from "@/features/students/service";
 import { listClasses, listSections, listAcademicYears } from "@/features/academics/repository";
 import { hasPermission } from "@/lib/permissions";
+import { getPortalAccessStatus } from "@/features/students/admin-auth";
 import { GuardiansPanel } from "@/features/students/components/guardians-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +32,18 @@ export default async function StudentDetailPage({
   ]);
 
   if (!student) notFound();
+
+  // GuardiansPanel only renders for canEdit holders — skip the privileged
+  // Auth Admin API lookups entirely for everyone else rather than doing
+  // the work and discarding it at render time.
+  const guardiansWithStatus = canEdit
+    ? await Promise.all(
+        guardians.map(async (g) => ({
+          ...g,
+          portalStatus: g.user_id ? await getPortalAccessStatus(g.user_id).catch(() => null) : null,
+        })),
+      )
+    : [];
 
   const classById = new Map(classes.map((c) => [c.id, c.name]));
   const sectionById = new Map(sections.map((s) => [s.id, s.name]));
@@ -126,7 +139,7 @@ export default async function StudentDetailPage({
       </div>
 
       {canEdit && (
-        <GuardiansPanel studentId={id} studentUserId={student.user_id} guardians={guardians} />
+        <GuardiansPanel studentId={id} studentUserId={student.user_id} guardians={guardiansWithStatus} />
       )}
     </div>
   );

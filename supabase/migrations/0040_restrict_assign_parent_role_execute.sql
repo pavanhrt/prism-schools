@@ -1,0 +1,15 @@
+-- 0039 tried to keep assign_parent_role() authenticated-only via
+-- `revoke all ... from public`, but Supabase's project-level default
+-- privileges grant EXECUTE directly to the named `anon` role at function
+-- creation time — a grant `revoke ... from public` never touches, since
+-- PUBLIC and `anon` are different grantees. The function already fails
+-- closed for anon (has_permission() reads auth.uid(), which is null for
+-- an anonymous caller, so it raises 'Forbidden') — this is defense in
+-- depth, not a live vulnerability fix, and is scoped only to this new
+-- function. The four pre-existing SECURITY DEFINER helpers
+-- (is_own_student, is_own_class_section, has_permission, has_role,
+-- find_auth_user_id_for_linking) are deliberately left untouched: they
+-- back RLS policies read by many tables, and revoking anon's execute on
+-- them without a full dependency audit risks silently breaking legitimate
+-- anon-facing reads elsewhere in the app — out of scope for this pass.
+revoke execute on function public.assign_parent_role(uuid) from anon;
