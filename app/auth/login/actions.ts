@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolvePortalRedirectPath } from "@/lib/auth/routing";
 import { loginSchema, type LoginInput } from "@/validations/auth";
 
 const MAX_ATTEMPTS = 5;
@@ -51,12 +52,5 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
     return { ok: false, error: "Invalid email or password." };
   }
 
-  const { data: roleRows } = await supabase
-    .from("user_roles")
-    .select("roles(portal_access)");
-  const isPortalUser = (roleRows ?? []).some(
-    (row) => (row.roles as unknown as { portal_access: boolean } | null)?.portal_access,
-  );
-
-  redirect(isPortalUser ? "/portal/dashboard" : "/admin/dashboard");
+  redirect(await resolvePortalRedirectPath(supabase));
 }

@@ -25,6 +25,12 @@ import { listEnrollmentsForStudent } from "@/features/students/service";
  * user-scoped client, not a service-role bypass, so this function can
  * never return more than students_select's ownership policy already
  * allows (0024_portal_access.sql).
+ *
+ * One auth user can own MULTIPLE guardian rows (Create Parent Login
+ * reuses a single auth account across a sibling's separate guardian
+ * record — features/students/rules.ts's "reuse_auth_user" case), so this
+ * fetches every guardian row for the caller, not just one, and dedupes
+ * the resulting student ids before loading them.
  */
 export async function getPortalStudents(
   supabase: SupabaseClient,
@@ -38,25 +44,26 @@ export async function getPortalStudents(
   if (ownError) throw ownError;
   if (ownStudent) return [ownStudent];
 
-  const { data: guardianRow, error: guardianError } = await supabase
+  const { data: guardianRows, error: guardianError } = await supabase
     .from("guardians")
     .select("id")
-    .eq("user_id", userId)
-    .maybeSingle();
+    .eq("user_id", userId);
   if (guardianError) throw guardianError;
-  if (!guardianRow) return [];
+  if (!guardianRows || guardianRows.length === 0) return [];
 
   const { data: links, error: linksError } = await supabase
     .from("student_guardians")
     .select("student_id")
-    .eq("guardian_id", guardianRow.id);
+    .in("guardian_id", guardianRows.map((g) => g.id));
   if (linksError) throw linksError;
   if (!links || links.length === 0) return [];
+
+  const studentIds = [...new Set(links.map((l) => l.student_id))];
 
   const { data: students, error: studentsError } = await supabase
     .from("students")
     .select("*")
-    .in("id", links.map((l) => l.student_id));
+    .in("id", studentIds);
   if (studentsError) throw studentsError;
   return students ?? [];
 }

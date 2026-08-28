@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { setPasswordSchema, type SetPasswordInput } from "@/validations/auth";
 import { createClient } from "@/lib/supabase/client";
+import { resolvePortalRedirectPath } from "@/lib/auth/routing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,12 +65,9 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    const { data: roleRows } = await supabase.from("user_roles").select("roles(portal_access)");
-    const isPortalUser = (roleRows ?? []).some(
-      (row) => (row.roles as unknown as { portal_access: boolean } | null)?.portal_access,
-    );
+    const redirectPath = await resolvePortalRedirectPath(supabase);
     setDone(true);
-    router.push(isPortalUser ? "/portal/dashboard" : "/admin/dashboard");
+    router.push(redirectPath);
   }
 
   return (
